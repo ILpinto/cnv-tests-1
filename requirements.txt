@@ -3,3 +3,4 @@ kubernetes
 PyYAML
 pexpect
 pytest
+python-autologs

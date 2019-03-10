@@ -5,8 +5,7 @@ import subprocess
 import time
 
 from _pytest.mark import ParameterSet
-
-from .logs import generate_logs
+from autologs.autologs import generate_logs
 
 LOGGER = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ from openshift.dynamic import DynamicClient
 from openshift.dynamic.exceptions import NotFoundError
 
 from . import utils
-from .logs import generate_logs
+from autologs.autologs import generate_logs
 
 urllib3.disable_warnings()
 LOGGER = logging.getLogger(__name__)
@@ -87,7 +87,7 @@ class OcpClient(object):
         ).get(**kwargs).items
 
     @generate_logs()
-    def wait_for_resource(self, name, api_version, kind, result=True, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
+    def wait_for_resource(self, name, api_version, kind, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
         """
         Wait for resource
 
@@ -95,7 +95,6 @@ class OcpClient(object):
             name (str): Resource name.
             api_version (str): API version of the resource.
             kind (str): The kind on the resource.
-            result (bool): Expected result.
             timeout (int): Time to wait for the resource.
             sleep (int): Time to sleep between retries.
 
@@ -119,7 +118,41 @@ class OcpClient(object):
                 name=name, api_version=api_version, kind=kind, **kwargs
             ))
         )
-        return sample.wait_for_func_status(result=result)
+        return sample.wait_for_func_status(result=True)
+
+    @generate_logs()
+    def wait_for_resource_to_be_gone(self, name, api_version, kind, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
+        """
+        Wait until resource is not exists
+
+        Args:
+            name (str): Resource name.
+            api_version (str): API version of the resource.
+            kind (str): The kind on the resource.
+            timeout (int): Time to wait for the resource.
+            sleep (int): Time to sleep between retries.
+
+        Keyword Args:
+            pretty
+            _continue
+            include_uninitialized
+            field_selector
+            label_selector
+            limit
+            resource_version
+            timeout_seconds
+            watch
+            async_req
+
+        Returns:
+            bool: True if resource exists, False if timeout reached.
+        """
+        sample = utils.TimeoutSampler(
+            timeout=timeout, sleep=sleep, func=lambda: bool(self.get_resource(
+                name=name, api_version=api_version, kind=kind, **kwargs
+            ))
+        )
+        return sample.wait_for_func_status(result=False)
 
     @generate_logs()
     def wait_for_resource_status(self, name, api_version, kind, status, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
@@ -186,9 +219,7 @@ class OcpClient(object):
         obj = self.dyn_client.resources.get(api_version=api_ver, kind=kind)
         obj.create(body=resource_dict, namespace=namespace)
         if wait:
-            return self.wait_for_resource(
-                name=resource_name, api_version=api_ver, kind=kind, result=True
-            )
+            return self.wait_for_resource(name=resource_name, api_version=api_ver, kind=kind)
         return True
 
     def delete_resource(self, name, namespace, api_version, kind, wait=False):
@@ -212,9 +243,8 @@ class OcpClient(object):
             return False
 
         if wait:
-            return self.wait_for_resource(
-                name=name, api_version=api_version, kind=kind, result=False
-            )
+
+            return self.wait_for_resource_to_be_gone(name=name, api_version=api_version, kind=kind)
         return True
 
     @generate_logs()
@@ -246,9 +276,7 @@ class OcpClient(object):
             return False
 
         if wait:
-            return self.wait_for_resource(
-                name=resource_name, api_version=api_ver, kind=kind, result=False
-            )
+            return self.wait_for_resource_to_be_gone(name=resource_name, api_version=api_ver, kind=kind)
         return True
 
     @generate_logs()

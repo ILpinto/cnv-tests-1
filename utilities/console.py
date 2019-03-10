@@ -1,3 +1,5 @@
+import sys
+
 import pexpect
 import logging
 
@@ -24,9 +26,15 @@ class Console(object):
         if namespace:
             cmd += "-n {namespace}".format(namespace=self.namespace)
 
-        self.child = pexpect.spawn(cmd)
+        self.child = pexpect.spawn(cmd, encoding='utf-8')
 
     def fedora(self):
+        """
+        Connect to Fedora
+
+        Returns:
+            spawn: Spawn object
+        """
         self.child.send("\n\n")
         self.child.expect("login: ")
         self.child.sendline(self.username or "fedora")
@@ -40,6 +48,12 @@ class Console(object):
         return self.child
 
     def cirros(self):
+        """
+        Connect to Cirros
+
+        Returns:
+            spawn: Spawn object
+        """
         self.child.send("\n\n")
         self.child.expect("login as 'cirros' user. default password: 'gocubsgo'. use 'sudo' for root.")
         self.child.send("\n")
@@ -55,6 +69,12 @@ class Console(object):
         return self.child
 
     def alpine(self):
+        """
+        Connect to Alpine
+
+        Returns:
+            spawn: Spawn object
+        """
         self.child.send("\n\n")
         self.child.expect("localhost login:")
         self.child.sendline(self.username or "root")
