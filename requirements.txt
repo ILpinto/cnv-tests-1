@@ -2,3 +2,4 @@ openshift
 kubernetes
 PyYAML
 pexpect
+pytest
