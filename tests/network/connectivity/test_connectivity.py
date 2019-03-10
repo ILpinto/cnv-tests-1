@@ -6,10 +6,10 @@ VM to VM connectivity
 import logging
 import pytest
 
-from lib import client
+from utilities import client
 from . import config
-from lib import console
-from lib import utils
+from utilities import console
+from utilities import utils
 from .fixtures import prepare_env # noqa: F401
 
 
@@ -69,6 +69,7 @@ class TestGuestPerformance(object):
         """
         In-guest performance bandwidth passthrough
         """
+        import ipdb;ipdb.set_trace()
         server_vm = config.VMS_LIST[0]
         client_vm = config.VMS_LIST[1]
         server_vm_console = console.Console(vm=server_vm).fedora()

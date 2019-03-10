@@ -5,7 +5,7 @@ Pytest conftest file for CNV tests
 """
 
 import pytest
-from lib import client
+from utilities import client
 from . import config
 
 
