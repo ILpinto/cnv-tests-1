@@ -5,7 +5,7 @@ Pytest conftest file for CNV network tests
 """
 
 import pytest
-from api import client
+from lib import client
 from tests.network import config
 
 

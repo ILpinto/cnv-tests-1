@@ -1,9 +1,8 @@
 import logging
 
 import pytest
-from api import client
+from lib import client, utils
 from . import config
-from api import utils
 
 LOGGER = logging.getLogger(__name__)
 
@@ -190,7 +189,7 @@ def wait_for_vm_interfaces(api, vmi):
     Wait until guest agent to report VMI interfaces.
 
     Args:
-        api (DynamicClient): OCP api instance.
+        api (DynamicClient): OCP lib instance.
         vmi (str): VMI name.
 
     Returns:

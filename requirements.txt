@@ -1,0 +1,4 @@
+openshift
+kubernetes
+PyYAML
+pexpect
