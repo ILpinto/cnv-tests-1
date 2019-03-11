@@ -101,16 +101,13 @@ def run_command(command):
     Returns:
         tuple: True, out if command succeeded, False, err otherwise.
     """
-    p = subprocess.Popen(
-        shlex.split(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
+    p = subprocess.Popen(shlex.split(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     if err:
-        LOGGER.error(
-            "Failed to run {cmd}. error: {err}".format(cmd=command, err=err)
-        )
+        LOGGER.error("Failed to run {cmd}. error: {err}".format(cmd=command, err=err))
         return False, err
-    return True, out
+
+    return True, out.decode("utf-8")
 
 
 @generate_logs()

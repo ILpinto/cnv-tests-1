@@ -12,7 +12,7 @@ from utilities import client
 from . import config
 from utilities import console
 from utilities import utils
-from .fixtures import prepare_env # noqa: F401
+from .fixtures import prepare_env  # noqa: F401
 
 
 LOGGER = logging.getLogger(__name__)

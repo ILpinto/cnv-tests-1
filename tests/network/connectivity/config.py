@@ -15,7 +15,7 @@ VMS = {
 }
 VMS_LIST = list(VMS.keys())
 OVS_NODES_IPS = ["192.168.0.3", "192.168.0.4"]
-IP_LINK_VETH_CMD = ["bash", "-c", "ip -o link show type veth | wc -l"]
+IP_LINK_VETH_CMD = "bash -c 'ip -o link show type veth | wc -l'"
 SVC_CMD = "oc create serviceaccount privileged-test-user -n {ns}".format(ns=NETWORK_NS)
 SVC_DELETE_CMD = "oc delete serviceaccount privileged-test-user -n {ns}".format(ns=NETWORK_NS)
 ADM_CMD = "oc adm policy add-scc-to-user privileged -z privileged-test-user"
@@ -29,12 +29,14 @@ VM_YAML_TEMPLATE = "tests/manifests/network/vm-template-fedora-multus.yaml"
 BOND_SUPPORT_ENV = None
 BOND_NAME = "bond1"
 OVS_NO_VLAN_PORT = "ovs_novlan_port"
-IP_LINK_ADD_BOND = "bash -c ip link add {bond} type bond".format(bond=BOND_NAME)
-IP_LINK_SET_BOND_PARAMS = "bash -c ip link set {bond} type bond miimon 100 mode active-backup".format(bond=BOND_NAME)
-IP_LINK_INTERFACE_DOWN = "bash", "-c", "ip link set {interface} down"
-IP_LINK_SET_INTERFACE_MASTER = "bash", "-c", "ip link set {interface} master {bond}"
-IP_LINK_INTERFACE_UP = "bash", "-c", "ip link set {interface} up"
-IP_LINK_SHOW = "bash -c ip link show {interface}"
+
+IP_LINK_ADD_BOND = "ip link add {bond} type bond".format(bond=BOND_NAME)
+IP_LINK_SET_BOND_PARAMS = "ip link set {bond} type bond miimon 100 mode active-backup".format(bond=BOND_NAME)
+IP_LINK_DEL_BOND = "ip link del {bond}".format(bond=BOND_NAME)
+IP_LINK_INTERFACE_DOWN = "ip link set {interface} down"
+IP_LINK_SET_INTERFACE_MASTER = "ip link set {interface} master {bond}"
+IP_LINK_INTERFACE_UP = "ip link set {interface} up"
+IP_LINK_SHOW = "ip link show {interface}"
 BOND_BRIDGE = "br1_for_bond"
 OVS_VSCTL_ADD_BR = "ovs-vsctl add-br {bridge}"
 OVS_VSCTL_ADD_PORT = "ovs-vsctl add-port {bridge} {interface}"

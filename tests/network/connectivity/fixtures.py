@@ -38,6 +38,9 @@ def prepare_env(request):
                 utils.run_command_on_pod(
                     command=config.OVS_VSCTL_DEL_BRIDGE_BOND_VXLAN, pod=pod_name, container=pod_container
                 )
+                utils.run_command_on_pod(
+                    command=config.IP_LINK_DEL_BOND, pod=pod_name, container=pod_container
+                )
 
             api.delete_pod(name=pod_name, namespace=pod.metadata.namespace, wait=True)
 
@@ -93,11 +96,7 @@ def prepare_env(request):
         )[0]
 
     if config.BOND_SUPPORT_ENV:
-        bond_commands = [
-            config.IP_LINK_ADD_BOND,
-            config.IP_LINK_SET_BOND_PARAMS,
-        ]
-
+        bond_commands = [config.IP_LINK_ADD_BOND, config.IP_LINK_SET_BOND_PARAMS]
         for pod in privileged_pods:
             pod_name = pod.metadata.name
             pod_container = pod.spec.containers[0].name
@@ -127,7 +126,7 @@ def prepare_env(request):
                 pod=pod_name, container=pod_container
             )
             assert res
-            assert "state UP" not in out
+            assert "state UP" in out
             assert utils.run_command_on_pod(
                 command=config.OVS_VSCTL_ADD_BR.format(bridge=bond_bridge),
                 pod=pod_name, container=pod_container
