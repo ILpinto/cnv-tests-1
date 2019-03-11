@@ -2,9 +2,11 @@ import logging
 
 import pytest
 from utilities import client, utils
+from autologs.autologs import GenerateLogs
 from . import config
 
 LOGGER = logging.getLogger(__name__)
+GL = GenerateLogs(logger=LOGGER)
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -182,7 +184,7 @@ def prepare_env(request):
         config.VMS[vmi]["pod_ip"] = active_ifcs[0].split("/")[0]
 
 
-@utils.generate_logs()
+@GL.generate_logs()
 def wait_for_vm_interfaces(api, vmi):
     """
     Wait until guest agent to report VMI interfaces.

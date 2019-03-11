@@ -6,10 +6,11 @@ from openshift.dynamic import DynamicClient
 from openshift.dynamic.exceptions import NotFoundError
 
 from . import utils
-from autologs.autologs import generate_logs
+from autologs.autologs import GenerateLogs
 
 urllib3.disable_warnings()
 LOGGER = logging.getLogger(__name__)
+GL = GenerateLogs(logger=LOGGER)
 TIMEOUT = 120
 SLEEP = 1
 
@@ -86,7 +87,7 @@ class OcpClient(object):
             api_version=api_version, kind=kind
         ).get(**kwargs).items
 
-    @generate_logs()
+    @GL.generate_logs()
     def wait_for_resource(self, name, api_version, kind, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
         """
         Wait for resource
@@ -120,7 +121,7 @@ class OcpClient(object):
         )
         return sample.wait_for_func_status(result=True)
 
-    @generate_logs()
+    @GL.generate_logs()
     def wait_for_resource_to_be_gone(self, name, api_version, kind, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
         """
         Wait until resource is not exists
@@ -154,7 +155,7 @@ class OcpClient(object):
         )
         return sample.wait_for_func_status(result=False)
 
-    @generate_logs()
+    @GL.generate_logs()
     def wait_for_resource_status(self, name, api_version, kind, status, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
         """
         Wait for resource to be in desire status
@@ -189,7 +190,7 @@ class OcpClient(object):
         )
         return sampler.wait_for_func_status(result=True)
 
-    @generate_logs()
+    @GL.generate_logs()
     def create_resource(self, yaml_file=None, resource_dict=None, namespace=None, wait=False):
         """
         Create resource from given yaml file or from dict
@@ -247,7 +248,7 @@ class OcpClient(object):
             return self.wait_for_resource_to_be_gone(name=name, api_version=api_version, kind=kind)
         return True
 
-    @generate_logs()
+    @GL.generate_logs()
     def delete_resource_from_yaml(self, yaml_file, wait=False):
         """
         Delete resource from given yaml file or from dict
@@ -279,7 +280,7 @@ class OcpClient(object):
             return self.wait_for_resource_to_be_gone(name=resource_name, api_version=api_ver, kind=kind)
         return True
 
-    @generate_logs()
+    @GL.generate_logs()
     def get_namespace(self, namespace):
         """
         Get namespace
@@ -292,7 +293,7 @@ class OcpClient(object):
         """
         return self.get_resource(name=namespace, api_version=self.apiv1, kind=self.namespace)
 
-    @generate_logs()
+    @GL.generate_logs()
     def create_namespace(self, name, wait=False, switch=False):
         """
         Create a namespace
@@ -315,7 +316,7 @@ class OcpClient(object):
             return self.switch_project(name=name)
         return res
 
-    @generate_logs()
+    @GL.generate_logs()
     def delete_namespace(self, name, wait=False):
         """
         Delete namespace
@@ -331,7 +332,7 @@ class OcpClient(object):
             name=name, namespace=name, api_version=self.apiv1, kind=self.namespace, wait=wait
         )
 
-    @generate_logs()
+    @GL.generate_logs()
     def get_nodes(self, label_selector=None):
         """
         Get nodes
@@ -344,7 +345,7 @@ class OcpClient(object):
         """
         return self.get_resources(api_version=self.apiv1, kind=self.node, label_selector=label_selector)
 
-    @generate_logs()
+    @GL.generate_logs()
     def get_pods(self, label_selector=None):
         """
         Get pods
@@ -357,7 +358,7 @@ class OcpClient(object):
         """
         return self.get_resources(api_version=self.apiv1, kind=self.pod, label_selector=label_selector)
 
-    @generate_logs()
+    @GL.generate_logs()
     def get_vmis(self):
         """
         Return List with all the VMI objects
@@ -367,7 +368,7 @@ class OcpClient(object):
         """
         return self.get_resources(api_version=self.kubvirt_v1alpha3, kind=self.vmi)
 
-    @generate_logs()
+    @GL.generate_logs()
     def get_vmi(self, name):
         """
         Get VMI
@@ -377,7 +378,7 @@ class OcpClient(object):
         """
         return self.get_resource(name=name, api_version=self.kubvirt_v1alpha3, kind=self.vmi)
 
-    @generate_logs()
+    @GL.generate_logs()
     def delete_pod(self, name, namespace, wait=False):
         """
         Delete Pod
@@ -394,7 +395,7 @@ class OcpClient(object):
             name=name, namespace=namespace, api_version=self.apiv1, kind=self.pod, wait=wait
         )
 
-    @generate_logs()
+    @GL.generate_logs()
     def switch_project(self, name):
         """
         Set working project
@@ -407,7 +408,7 @@ class OcpClient(object):
         """
         return utils.run_command(command="oc project {name}".format(name=name))[0]
 
-    @generate_logs()
+    @GL.generate_logs()
     def delete_vm(self, name, namespace, wait=False):
         """
         Delete VM
@@ -425,7 +426,7 @@ class OcpClient(object):
             wait=wait
         )
 
-    @generate_logs()
+    @GL.generate_logs()
     def wait_for_vmi_status(self, name, status):
         """
         Wait for VM status
@@ -441,7 +442,7 @@ class OcpClient(object):
             name=name, api_version=self.kubvirt_v1alpha3, kind=self.vmi, status=status
         )
 
-    @generate_logs()
+    @GL.generate_logs()
     def wait_for_pod_status(self, name, status):
         """
         Wait for Pod status
