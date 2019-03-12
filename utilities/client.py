@@ -6,10 +6,9 @@ from openshift.dynamic import DynamicClient
 from openshift.dynamic.exceptions import NotFoundError
 
 from . import utils, types
-from autologs.autologs import GenerateLogs
+from autologs.autologs import generate_logs
 
 LOGGER = logging.getLogger(__name__)
-GL = GenerateLogs(logger=LOGGER)
 TIMEOUT = 120
 SLEEP = 1
 
@@ -78,7 +77,7 @@ class OcpClient(object):
             api_version=api_version, kind=kind
         ).get(**kwargs).items
 
-    @GL.generate_logs()
+    @generate_logs()
     def wait_for_resource(self, name, api_version, kind, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
         """
         Wait for resource
@@ -112,7 +111,7 @@ class OcpClient(object):
         )
         return sample.wait_for_func_status(result=True)
 
-    @GL.generate_logs()
+    @generate_logs()
     def wait_for_resource_to_be_gone(self, name, api_version, kind, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
         """
         Wait until resource is not exists
@@ -146,10 +145,10 @@ class OcpClient(object):
         )
         return sample.wait_for_func_status(result=False)
 
-    @GL.generate_logs()
+    @generate_logs()
     def wait_for_resource_status(self, name, api_version, kind, status, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
         """
-        Wait for resource to be in desire status
+        Wait for resource to be in status
 
         Args:
             name (str): Resource name.
@@ -181,7 +180,7 @@ class OcpClient(object):
         )
         return sampler.wait_for_func_status(result=True)
 
-    @GL.generate_logs()
+    @generate_logs()
     def create_resource(self, yaml_file=None, resource_dict=None, namespace=None, wait=False):
         """
         Create resource from given yaml file or from dict
@@ -239,7 +238,7 @@ class OcpClient(object):
             return self.wait_for_resource_to_be_gone(name=name, api_version=api_version, kind=kind)
         return True
 
-    @GL.generate_logs()
+    @generate_logs()
     def delete_resource_from_yaml(self, yaml_file, wait=False):
         """
         Delete resource from given yaml file or from dict
@@ -271,7 +270,7 @@ class OcpClient(object):
             return self.wait_for_resource_to_be_gone(name=resource_name, api_version=api_ver, kind=kind)
         return True
 
-    @GL.generate_logs()
+    @generate_logs()
     def get_namespace(self, namespace):
         """
         Get namespace
@@ -284,13 +283,13 @@ class OcpClient(object):
         """
         return self.get_resource(name=namespace, api_version=types.API_VERSION_V1, kind=types.NAMESPACE)
 
-    @GL.generate_logs()
-    def create_namespace(self, name, wait=False, switch=False):
+    @generate_logs()
+    def create_namespace(self, namespace, wait=False, switch=False):
         """
         Create a namespace
 
         Args:
-            name (str): Namespace name.
+            namespace (str): Namespace name.
             wait (bool) : True to wait for resource status.
             switch (bool): Switch to created namespace (project)
 
@@ -300,30 +299,30 @@ class OcpClient(object):
         body = {
             'apiVersion': types.API_VERSION_V1,
             'kind': types.NAMESPACE,
-            'metadata': {'name': name}
+            'metadata': {'name': namespace}
         }
         res = self.create_resource(resource_dict=body, wait=wait)
         if switch and res:
-            return self.switch_project(name=name)
+            return self.switch_project(project=namespace)
         return res
 
-    @GL.generate_logs()
-    def delete_namespace(self, name, wait=False):
+    @generate_logs()
+    def delete_namespace(self, namespace, wait=False):
         """
         Delete namespace
 
         Args:
-            name (str): Namespace name to delete.
+            namespace (str): Namespace name to delete.
             wait (bool) : True to wait for resource status.
 
         Returns:
             bool: True if delete succeeded, False otherwise
         """
         return self.delete_resource(
-            name=name, namespace=name, api_version=types.API_VERSION_V1, kind=types.NAMESPACE, wait=wait
+            name=namespace, namespace=namespace, api_version=types.API_VERSION_V1, kind=types.NAMESPACE, wait=wait
         )
 
-    @GL.generate_logs()
+    @generate_logs()
     def get_nodes(self, label_selector=None):
         """
         Get nodes
@@ -336,7 +335,7 @@ class OcpClient(object):
         """
         return self.get_resources(api_version=types.API_VERSION_V1, kind=types.NODE, label_selector=label_selector)
 
-    @GL.generate_logs()
+    @generate_logs()
     def get_pods(self, label_selector=None):
         """
         Get pods
@@ -349,7 +348,7 @@ class OcpClient(object):
         """
         return self.get_resources(api_version=types.API_VERSION_V1, kind=types.POD, label_selector=label_selector)
 
-    @GL.generate_logs()
+    @generate_logs()
     def get_vmis(self):
         """
         Return List with all the VMI objects
@@ -359,23 +358,33 @@ class OcpClient(object):
         """
         return self.get_resources(api_version=types.API_VERSION_ALPHA_3, kind=types.VMI)
 
-    @GL.generate_logs()
-    def get_vmi(self, name):
+    @generate_logs()
+    def get_vmi(self, vmi):
         """
         Get VMI
 
         Returns:
             dict: VMI
         """
-        return self.get_resource(name=name, api_version=types.API_VERSION_ALPHA_3, kind=types.VMI)
+        return self.get_resource(name=vmi, api_version=types.API_VERSION_ALPHA_3, kind=types.VMI)
 
-    @GL.generate_logs()
-    def delete_pod(self, name, namespace, wait=False):
+    @generate_logs()
+    def get_vm(self, vm):
+        """
+        Get VM
+
+        Returns:
+            dict: VM
+        """
+        return self.get_resource(name=vm, api_version=types.API_VERSION_ALPHA_3, kind=types.VM)
+
+    @generate_logs()
+    def delete_pod(self, pod, namespace, wait=False):
         """
         Delete Pod
 
         Args:
-            name (str): Pod name.
+            pod (str): Pod name.
             namespace (str): Namespace name.
             wait (bool): True to wait for pod to be deleted.
 
@@ -383,29 +392,29 @@ class OcpClient(object):
             bool: True if delete succeeded, False otherwise.
         """
         return self.delete_resource(
-            name=name, namespace=namespace, api_version=types.API_VERSION_V1, kind=types.POD, wait=wait
+            name=pod, namespace=namespace, api_version=types.API_VERSION_V1, kind=types.POD, wait=wait
         )
 
-    @GL.generate_logs()
-    def switch_project(self, name):
+    @generate_logs()
+    def switch_project(self, project):
         """
-        Set working project
+        Switch to project
 
         Args:
-            name (str): Project name
+            project (str): Project name
 
         Returns:
             bool: True if switch succeeded, False otherwise
         """
-        return utils.run_command(command="oc project {name}".format(name=name))[0]
+        return utils.run_command(command="oc project {name}".format(name=project))[0]
 
-    @GL.generate_logs()
-    def delete_vm(self, name, namespace, wait=False):
+    @generate_logs()
+    def delete_vm(self, vm, namespace, wait=False):
         """
         Delete VM
 
         Args:
-            name (str): VM name.
+            vm (str): VM name.
             namespace (str): Namespace name.
             wait (bool): True to wait for pod to be deleted.
 
@@ -413,38 +422,38 @@ class OcpClient(object):
             bool: True if delete succeeded, False otherwise.
         """
         return self.delete_resource(
-            name=name, namespace=namespace, api_version=types.API_VERSION_ALPHA_3, kind=types.VM,
+            name=vm, namespace=namespace, api_version=types.API_VERSION_ALPHA_3, kind=types.VM,
             wait=wait
         )
 
-    @GL.generate_logs()
-    def wait_for_vmi_status(self, name, status):
+    @generate_logs()
+    def wait_for_vmi_status(self, vmi, status):
         """
         Wait for VM status
 
         Args:
-            name (str): VMI name
+            vmi (str): VMI name
             status (str): Desire status.
 
         Returns:
             bool: True if resource in desire status, False if timeout reached.
         """
         return self.wait_for_resource_status(
-            name=name, api_version=types.API_VERSION_ALPHA_3, kind=types.VMI, status=status
+            name=vmi, api_version=types.API_VERSION_ALPHA_3, kind=types.VMI, status=status
         )
 
-    @GL.generate_logs()
-    def wait_for_pod_status(self, name, status):
+    @generate_logs()
+    def wait_for_pod_status(self, pod, status):
         """
         Wait for Pod status
 
         Args:
-            name (str): Pod name
+            pod (str): Pod name
             status (str): Desire status.
 
         Returns:
             bool: True if resource in desire status, False if timeout reached.
         """
         return self.wait_for_resource_status(
-            name=name, api_version=types.API_VERSION_V1, kind=types.POD, status=status
+            name=pod, api_version=types.API_VERSION_V1, kind=types.POD, status=status
         )

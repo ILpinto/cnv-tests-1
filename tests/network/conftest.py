@@ -20,7 +20,7 @@ def init(request):
         """
         Remove test namespaces
         """
-        assert api.delete_namespace(name=config.NETWORK_NS, wait=True)
+        assert api.delete_namespace(namespace=config.NETWORK_NS, wait=True)
     request.addfinalizer(fin)
 
-    assert api.create_namespace(name=config.NETWORK_NS, wait=True, switch=True)
+    assert api.create_namespace(namespace=config.NETWORK_NS, wait=True, switch=True)

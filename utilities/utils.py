@@ -5,10 +5,9 @@ import subprocess
 import time
 
 from _pytest.mark import ParameterSet
-from autologs.autologs import GenerateLogs
+from autologs.autologs import generate_logs
 
 LOGGER = logging.getLogger(__name__)
-GL = GenerateLogs(logger=LOGGER)
 
 
 class TimeoutExpiredError(Exception):
@@ -91,7 +90,7 @@ class TimeoutSampler(object):
             return False
 
 
-@GL.generate_logs()
+@generate_logs()
 def run_command(command):
     """
     Run command on local machine.
@@ -111,7 +110,7 @@ def run_command(command):
     return True, out.decode("utf-8")
 
 
-@GL.generate_logs()
+@generate_logs()
 def run_command_on_pod(command, pod, container=None):
     """
     Run command on pod.
@@ -131,7 +130,7 @@ def run_command_on_pod(command, pod, container=None):
     return run_command(command=command)
 
 
-@GL.generate_logs()
+@generate_logs()
 def get_json_from_template(file_, **kwargs):
     """
     Generate JSON from template file_
