@@ -5,10 +5,9 @@ from kubernetes import config as kube_config
 from openshift.dynamic import DynamicClient
 from openshift.dynamic.exceptions import NotFoundError
 
-from . import utils
+from . import utils, types
 from autologs.autologs import GenerateLogs
 
-urllib3.disable_warnings()
 LOGGER = logging.getLogger(__name__)
 GL = GenerateLogs(logger=LOGGER)
 TIMEOUT = 120
@@ -23,14 +22,6 @@ class OcpClient(object):
         except (kube_config.ConfigException, urllib3.exceptions.MaxRetryError):
             LOGGER.error('You need to be login to cluster')
             raise
-
-        self.vmi = 'VirtualMachineInstance'
-        self.vm = 'VirtualMachine'
-        self.kubvirt_v1alpha3 = 'kubevirt.io/v1alpha3'
-        self.pod = "Pod"
-        self.node = 'Node'
-        self.apiv1 = 'v1'
-        self.namespace = 'Namespace'
 
     def get_resource(self, name, api_version, kind, **kwargs):
         """
@@ -291,7 +282,7 @@ class OcpClient(object):
         Returns:
             dict: Namespace dict.
         """
-        return self.get_resource(name=namespace, api_version=self.apiv1, kind=self.namespace)
+        return self.get_resource(name=namespace, api_version=types.API_VERSION_V1, kind=types.NAMESPACE)
 
     @GL.generate_logs()
     def create_namespace(self, name, wait=False, switch=False):
@@ -307,8 +298,8 @@ class OcpClient(object):
             bool: True if create succeeded, False otherwise
         """
         body = {
-            'apiVersion': self.apiv1,
-            'kind': self.namespace,
+            'apiVersion': types.API_VERSION_V1,
+            'kind': types.NAMESPACE,
             'metadata': {'name': name}
         }
         res = self.create_resource(resource_dict=body, wait=wait)
@@ -329,7 +320,7 @@ class OcpClient(object):
             bool: True if delete succeeded, False otherwise
         """
         return self.delete_resource(
-            name=name, namespace=name, api_version=self.apiv1, kind=self.namespace, wait=wait
+            name=name, namespace=name, api_version=types.API_VERSION_V1, kind=types.NAMESPACE, wait=wait
         )
 
     @GL.generate_logs()
@@ -343,7 +334,7 @@ class OcpClient(object):
         Returns:
             list: List of nodes
         """
-        return self.get_resources(api_version=self.apiv1, kind=self.node, label_selector=label_selector)
+        return self.get_resources(api_version=types.API_VERSION_V1, kind=types.NODE, label_selector=label_selector)
 
     @GL.generate_logs()
     def get_pods(self, label_selector=None):
@@ -356,7 +347,7 @@ class OcpClient(object):
         Returns:
             list: List of pods
         """
-        return self.get_resources(api_version=self.apiv1, kind=self.pod, label_selector=label_selector)
+        return self.get_resources(api_version=types.API_VERSION_V1, kind=types.POD, label_selector=label_selector)
 
     @GL.generate_logs()
     def get_vmis(self):
@@ -366,7 +357,7 @@ class OcpClient(object):
         Returns:
             list: List of VMIs
         """
-        return self.get_resources(api_version=self.kubvirt_v1alpha3, kind=self.vmi)
+        return self.get_resources(api_version=types.API_VERSION_ALPHA_3, kind=types.VMI)
 
     @GL.generate_logs()
     def get_vmi(self, name):
@@ -376,7 +367,7 @@ class OcpClient(object):
         Returns:
             dict: VMI
         """
-        return self.get_resource(name=name, api_version=self.kubvirt_v1alpha3, kind=self.vmi)
+        return self.get_resource(name=name, api_version=types.API_VERSION_ALPHA_3, kind=types.VMI)
 
     @GL.generate_logs()
     def delete_pod(self, name, namespace, wait=False):
@@ -392,7 +383,7 @@ class OcpClient(object):
             bool: True if delete succeeded, False otherwise.
         """
         return self.delete_resource(
-            name=name, namespace=namespace, api_version=self.apiv1, kind=self.pod, wait=wait
+            name=name, namespace=namespace, api_version=types.API_VERSION_V1, kind=types.POD, wait=wait
         )
 
     @GL.generate_logs()
@@ -422,7 +413,7 @@ class OcpClient(object):
             bool: True if delete succeeded, False otherwise.
         """
         return self.delete_resource(
-            name=name, namespace=namespace, api_version=self.kubvirt_v1alpha3, kind=self.vm,
+            name=name, namespace=namespace, api_version=types.API_VERSION_ALPHA_3, kind=types.VM,
             wait=wait
         )
 
@@ -439,7 +430,7 @@ class OcpClient(object):
             bool: True if resource in desire status, False if timeout reached.
         """
         return self.wait_for_resource_status(
-            name=name, api_version=self.kubvirt_v1alpha3, kind=self.vmi, status=status
+            name=name, api_version=types.API_VERSION_ALPHA_3, kind=types.VMI, status=status
         )
 
     @GL.generate_logs()
@@ -455,5 +446,5 @@ class OcpClient(object):
             bool: True if resource in desire status, False if timeout reached.
         """
         return self.wait_for_resource_status(
-            name=name, api_version=self.apiv1, kind=self.pod, status=status
+            name=name, api_version=types.API_VERSION_V1, kind=types.POD, status=status
         )
