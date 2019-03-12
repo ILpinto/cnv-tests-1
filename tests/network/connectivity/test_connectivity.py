@@ -3,6 +3,7 @@
 """
 VM to VM connectivity
 """
+import json
 import logging
 import sys
 
@@ -27,18 +28,18 @@ class TestConnectivity(object):
     dst_vm = config.VMS_LIST[1]
 
     @pytest.mark.parametrize(
-        "ip",
+        'ip',
         [
-            pytest.param("pod_ip"),
-            pytest.param("ovs_ip"),
-            pytest.param("bond_ip", marks=(pytest.mark.skipif(not config.BOND_SUPPORT_ENV, reason="No BOND support"))),
-            pytest.param("non_vlan_ip")
+            pytest.param('pod_ip'),
+            pytest.param('ovs_ip'),
+            pytest.param('bond_ip', marks=(pytest.mark.skipif(not config.BOND_SUPPORT_ENV, reason='No BOND support'))),
+            pytest.param('non_vlan_ip')
         ],
         ids=[
-            "Connectivity_between_VM_and_VM_over_POD_network",
-            "Connectivity_between_VM_and_VM_over_Multus_with_OVS_network",
-            "Connectivity_between_VM_and_VM_over_Multus_with_OVS_on_BOND_network",
-            "Negative:_No_connectivity_from_non_VLAN_to_VLAN"
+            'Connectivity_between_VM_and_VM_over_POD_network',
+            'Connectivity_between_VM_and_VM_over_Multus_with_OVS_network',
+            'Connectivity_between_VM_and_VM_over_Multus_with_OVS_on_BOND_network',
+            'Negative:_No_connectivity_from_non_VLAN_to_VLAN'
         ]
     )
     def test_connectivity(self, ip):
@@ -47,25 +48,18 @@ class TestConnectivity(object):
         """
         _id = utils.get_test_parametrize_ids(item=self.test_connectivity.pytestmark, params=ip)
         LOGGER.info(_id)
-        positive = ip != "non_vlan_ip"
+        positive = ip != 'non_vlan_ip'
         dst_ip = config.VMS.get(self.dst_vm).get(ip) if positive else config.OVS_NODES_IPS[0]
-        src_vm_console = console.Console(vm=self.src_vm).fedora()
-        assert src_vm_console
-        src_vm_console.sendline("ping -w 3 {ip}".format(ip=dst_ip))
-        src_vm_console.sendline("echo $?")
-        src_vm_console.expect("0" if positive else "1")
-        src_vm_console.sendline("exit")
-        src_vm_console.send("\n\n")
-        src_vm_console.expect("login:")
-        src_vm_console.close()
+        with console.Console(vm=self.src_vm, distro='fedora') as src_vm_console:
+            src_vm_console.sendline('ping -w 3 {ip}'.format(ip=dst_ip))
+            src_vm_console.sendline('echo $?')
+            src_vm_console.expect('0' if positive else '1')
 
 
 class TestGuestPerformance(object):
     """
     In-guest performance bandwidth passthrough
     """
-    server_vm = config.VMS_LIST[0]
-    client_vm = config.VMS_LIST[1]
 
     def test_guest_performance(self):
         """
@@ -73,13 +67,46 @@ class TestGuestPerformance(object):
         """
         server_vm = config.VMS_LIST[0]
         client_vm = config.VMS_LIST[1]
-        server_ip = config.VMS.get(self.server_vm).get("ovs_ip")
-        server_vm_console = console.Console(vm=server_vm).fedora()
-        client_vm_console = console.Console(vm=client_vm).fedora()
-        client_vm_console.logfile = sys.stdout
+        server_ip = config.VMS.get(server_vm).get('ovs_ip')
+        with console.Console(vm=server_vm, distro='fedora') as server_vm_console:
+            server_vm_console.sendline('iperf3 -sB {server_ip}'.format(server_ip=server_ip))
+            with console.Console(vm=client_vm, distro='fedora') as client_vm_console:
+                client_vm_console.sendline('iperf3 -c {server_ip} -t 5 -J'.format(server_ip=server_ip))
+                # client_vm_console.expect('\$')
+                client_vm_console.expect('}\r\r\n}\r\r\n')
+                import ipdb;ipdb.set_trace()
+                iperf_data = client_vm_console.before
+            server_vm_console.sendline(chr(3))  # Send ctrl+c to kill iperf3 server
 
-        server_vm_console.sendline("iperf3 -sB {server_ip}".format(server_ip=server_ip))
-        client_vm_console.sendline("iperf3 -c {server_ip} -t 5".format(server_ip=server_ip))
-        client_vm_console.expect("iperf Done.")
-        before_out = client_vm_console.before
-        LOGGER.info(before_out)
+        iperf_data += '}\r\r\n}\r\r\n'
+        iperf_json = json.loads(iperf_data[iperf_data.find('{'):])
+        sum_sent = iperf_json.get('end').get('sum_sent')
+
+
+class TestVethRemovedAfterVmsDeleted(object):
+    """
+    Check that veth interfaces are removed from host after VM deleted
+    """
+    api = client.OcpClient()
+
+    def test_veth_removed_from_host_after_vm_deleted(self):
+        """
+        Check that veth interfaces are removed from host after VM deleted
+        """
+        for vm in config.VMS_LIST:
+            vm_info = self.api.get_vmi(vmi=vm)
+            vm_interfaces = vm_info.get('status', {}).get('interfaces', [])
+            vm_node = vm_info.get('status', {}).get('nodeName')
+            for pod in config.PRIVILEGED_PODS:
+                if pod.get('spec').get('nodeName') == vm_node:
+                    cmd = 'bash -c "ip -o link show type veth | wc -l"'
+                    pod_name = pod.metadata.name
+                    pod_container = pod.spec.containers[0].name
+                    err, out = utils.run_command_on_pod(command=cmd, pod=pod_name, container=pod_container)
+                    assert err
+                    host_vath_before_delete = int(out.strip())
+                    assert self.api.delete_vm(vm=vm, namespace=config.NETWORK_NS, wait=True)
+                    err, out = utils.run_command_on_pod(command=cmd, pod=pod_name, container=pod_container)
+                    assert err
+                    host_vath_after_delete = int(out.strip())
+                    assert host_vath_after_delete == host_vath_before_delete - len(vm_interfaces)

@@ -22,7 +22,7 @@ def init(request):
         Remove test namespaces
         """
         for namespace in namespaces:
-            api.delete_namespace(name=namespace, wait=True)
+            api.delete_namespace(namespace=namespace, wait=True)
     request.addfinalizer(fin)
 
     for namespace in namespaces:

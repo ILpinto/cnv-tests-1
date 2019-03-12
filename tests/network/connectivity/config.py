@@ -21,6 +21,8 @@ SVC_DELETE_CMD = "oc delete serviceaccount privileged-test-user -n {ns}".format(
 ADM_CMD = "oc adm policy add-scc-to-user privileged -z privileged-test-user"
 GET_NICS_CMD = "bash -c 'ls -l /sys/class/net/ | grep -v virtual | grep net | rev | cut -d '/' -f 1 | rev'"
 
+PRIVILEGED_PODS = []
+
 PRIVILEGED_POD_YAML = "tests/manifests/privileged-pod.yml"
 OVS_VLAN_YAML = "tests/manifests/network/ovs-vlan-net.yml"
 OVS_BOND_YAML = "tests/manifests/network/ovs-net-bond.yml"

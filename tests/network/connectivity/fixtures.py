@@ -2,11 +2,10 @@ import logging
 
 import pytest
 from utilities import client, utils
-from autologs.autologs import GenerateLogs
+from autologs.autologs import generate_logs
 from . import config
 
 LOGGER = logging.getLogger(__name__)
-GL = GenerateLogs(logger=LOGGER)
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -28,9 +27,8 @@ def prepare_env(request):
         for yaml_ in (config.PRIVILEGED_POD_YAML, config.OVS_VLAN_YAML, config.OVS_BOND_YAML):
             api.delete_resource_from_yaml(yaml_file=yaml_, wait=True)
 
-        privileged_pods = api.get_pods(label_selector="app=privileged-test-pod")
         # Wait until privileged_pod deleted
-        for pod in privileged_pods:
+        for pod in config.PRIVILEGED_PODS:
             pod_name = pod.metadata.name
             pod_container = pod.spec.containers[0].name
             utils.run_command_on_pod(
@@ -44,10 +42,11 @@ def prepare_env(request):
                     command=config.IP_LINK_DEL_BOND, pod=pod_name, container=pod_container
                 )
 
-            api.delete_pod(name=pod_name, namespace=pod.metadata.namespace, wait=True)
+            api.delete_pod(pod=pod_name, namespace=pod.metadata.namespace, wait=True)
 
         for vm in vms:
-            api.delete_vm(name=vm, namespace=config.NETWORK_NS, wait=True)
+            if api.get_vm(vm=vm):
+                api.delete_vm(vm=vm, namespace=config.NETWORK_NS, wait=True)
 
     request.addfinalizer(fin)
 
@@ -55,8 +54,8 @@ def prepare_env(request):
     assert utils.run_command(command=config.SVC_CMD)[0]
     assert utils.run_command(command=config.ADM_CMD)[0]
     api.create_resource(yaml_file=config.PRIVILEGED_POD_YAML)
-    privileged_pods = api.get_pods(label_selector="app=privileged-test-pod")
-    assert len(compute_nodes) == len(privileged_pods)
+    config.PRIVILEGED_PODS = api.get_pods(label_selector="app=privileged-test-pod")
+    assert len(compute_nodes) == len(config.PRIVILEGED_PODS)
     api.create_resource(yaml_file=config.OVS_VLAN_YAML)
     api.create_resource(yaml_file=config.OVS_BOND_YAML)
     for node in compute_nodes:
@@ -65,11 +64,11 @@ def prepare_env(request):
                 nodes_network_info[node.metadata.name] = addr.address
                 break
 
-    for idx, pod in enumerate(privileged_pods):
+    for idx, pod in enumerate(config.PRIVILEGED_PODS):
         pod_name = pod.metadata.name
         node_name = pod.spec.nodeName
         pod_container = pod.spec.containers[0].name
-        assert api.wait_for_pod_status(name=pod_name, status="Running")
+        assert api.wait_for_pod_status(pod=pod_name, status="Running")
         node_nics = utils.run_command_on_pod(
             command=config.GET_NICS_CMD, pod=pod_name, container=pod_container
         )[1]
@@ -99,7 +98,7 @@ def prepare_env(request):
 
     if config.BOND_SUPPORT_ENV:
         bond_commands = [config.IP_LINK_ADD_BOND, config.IP_LINK_SET_BOND_PARAMS]
-        for pod in privileged_pods:
+        for pod in config.PRIVILEGED_PODS:
             pod_name = pod.metadata.name
             pod_container = pod.spec.containers[0].name
             for cmd in bond_commands:
@@ -161,8 +160,8 @@ def prepare_env(request):
             interfaces.append(bond_bridge_interface)
             networks.append(bond_bridge_network)
             cloud_init_user_data += (
-                "- nmcli con add type ethernet con-name eth1 ifname eth2\n"
-                "- nmcli con mod eth2 ipv4.addresses {ip}/24 ipv4.method manual\n".format(
+                "  - nmcli con add type ethernet con-name eth1 ifname eth2\n"
+                "  - nmcli con mod eth2 ipv4.addresses {ip}/24 ipv4.method manual\n".format(
                     ip=config.VMS.get(vm).get("bond_ip")
                 )
             )
@@ -176,18 +175,18 @@ def prepare_env(request):
         assert api.create_resource(resource_dict=json_out, namespace=config.NETWORK_NS)
 
     for vmi in vms:
-        assert api.wait_for_vmi_status(name=vmi, status="Running")
+        assert api.wait_for_vmi_status(vmi=vmi, status="Running")
         wait_for_vm_interfaces(api=api, vmi=vmi)
-        vmi_data = api.get_vmi(name=vmi)
+        vmi_data = api.get_vmi(vmi=vmi)
         ifcs = vmi_data.get('status', {}).get('interfaces', [])
         active_ifcs = [i.get('ipAddress') for i in ifcs if i.get('interfaceName') == "eth0"]
         config.VMS[vmi]["pod_ip"] = active_ifcs[0].split("/")[0]
 
 
-@GL.generate_logs()
+@generate_logs()
 def wait_for_vm_interfaces(api, vmi):
     """
-    Wait until guest agent to report VMI interfaces.
+    Wait until guest agent report VMI interfaces.
 
     Args:
         api (DynamicClient): OCP utilities instance.
@@ -199,7 +198,7 @@ def wait_for_vm_interfaces(api, vmi):
     Raises:
         TimeoutExpiredError: After timeout reached.
     """
-    sampler = utils.TimeoutSampler(timeout=420, sleep=1, func=api.get_vmi, name=vmi)
+    sampler = utils.TimeoutSampler(timeout=500, sleep=1, func=api.get_vmi, vmi=vmi)
     for sample in sampler:
         ifcs = sample.get('status', {}).get('interfaces', [])
         active_ifcs = [i for i in ifcs if i.get('ipAddress') and i.get('interfaceName')]
