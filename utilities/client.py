@@ -21,7 +21,7 @@ class OcpClient(object):
         try:
             self.dyn_client = DynamicClient(kube_config.new_client_from_config())
         except (kube_config.ConfigException, urllib3.exceptions.MaxRetryError):
-            LOGGER.error('You need to be login to cluster or have openshift-master.kubeconfig under $WORKSPACE')
+            LOGGER.error('You need to be login to cluster')
             raise
 
     def get_resource(self, name, api_version, kind, **kwargs):
