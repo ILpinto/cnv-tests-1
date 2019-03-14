@@ -4,3 +4,5 @@ PyYAML
 pexpect
 pytest
 python-autologs
+bitmath
+urllib3

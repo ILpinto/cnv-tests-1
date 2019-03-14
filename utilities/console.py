@@ -20,6 +20,11 @@ class Console(object):
             username (str): Username for login.
             password (str): Password for login.
             namespace (str): VM namespace
+
+        Examples:
+            with console.Console(vm=vm_name, distro='fedora') as vmc:
+                vmc.sendline('some command)
+                vmc.expect('some output')
         """
         self.vm = vm
         self.distro = distro

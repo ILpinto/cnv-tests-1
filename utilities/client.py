@@ -429,7 +429,7 @@ class OcpClient(object):
     @generate_logs()
     def wait_for_vmi_status(self, vmi, status):
         """
-        Wait for VM status
+        Wait for VMI status
 
         Args:
             vmi (str): VMI name

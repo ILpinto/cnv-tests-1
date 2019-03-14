@@ -5,9 +5,10 @@ VM to VM connectivity
 """
 import json
 import logging
-import sys
-
+import bitmath
 import pytest
+
+from autologs.autologs import generate_logs
 
 from utilities import client
 from . import config
@@ -65,22 +66,25 @@ class TestGuestPerformance(object):
         """
         In-guest performance bandwidth passthrough
         """
+        if not config.REAL_NICS_ENV:
+            pytest.skip(msg='Only run on bare metal env')
+
         server_vm = config.VMS_LIST[0]
         client_vm = config.VMS_LIST[1]
         server_ip = config.VMS.get(server_vm).get('ovs_ip')
         with console.Console(vm=server_vm, distro='fedora') as server_vm_console:
             server_vm_console.sendline('iperf3 -sB {server_ip}'.format(server_ip=server_ip))
             with console.Console(vm=client_vm, distro='fedora') as client_vm_console:
-                client_vm_console.sendline('iperf3 -c {server_ip} -t 5 -J'.format(server_ip=server_ip))
-                # client_vm_console.expect('\$')
+                client_vm_console.sendline('iperf3 -c {server_ip} -t 5 -u -J'.format(server_ip=server_ip))
                 client_vm_console.expect('}\r\r\n}\r\r\n')
-                import ipdb;ipdb.set_trace()
                 iperf_data = client_vm_console.before
             server_vm_console.sendline(chr(3))  # Send ctrl+c to kill iperf3 server
 
         iperf_data += '}\r\r\n}\r\r\n'
         iperf_json = json.loads(iperf_data[iperf_data.find('{'):])
-        sum_sent = iperf_json.get('end').get('sum_sent')
+        sum_sent = iperf_json.get('end').get('sum')
+        bits_per_second = int(sum_sent.get('bits_per_second'))
+        assert float(bitmath.Byte(bits_per_second).GiB) >= 2.5
 
 
 class TestVethRemovedAfterVmsDeleted(object):
@@ -99,14 +103,37 @@ class TestVethRemovedAfterVmsDeleted(object):
             vm_node = vm_info.get('status', {}).get('nodeName')
             for pod in config.PRIVILEGED_PODS:
                 if pod.get('spec').get('nodeName') == vm_node:
-                    cmd = 'bash -c "ip -o link show type veth | wc -l"'
                     pod_name = pod.metadata.name
                     pod_container = pod.spec.containers[0].name
-                    err, out = utils.run_command_on_pod(command=cmd, pod=pod_name, container=pod_container)
+                    err, out = utils.run_command_on_pod(
+                        command=config.IP_LINK_SHOW_BETH_CMD, pod=pod_name, container=pod_container
+                    )
                     assert err
                     host_vath_before_delete = int(out.strip())
                     assert self.api.delete_vm(vm=vm, namespace=config.NETWORK_NS, wait=True)
-                    err, out = utils.run_command_on_pod(command=cmd, pod=pod_name, container=pod_container)
-                    assert err
-                    host_vath_after_delete = int(out.strip())
-                    assert host_vath_after_delete == host_vath_before_delete - len(vm_interfaces)
+                    expect_host_veth = host_vath_before_delete - len(vm_interfaces)
+
+                    sampler = utils.TimeoutSampler(
+                        timeout=30, sleep=1, func=get_host_veth_sampler,
+                        pod_name=pod_name, pod_container=pod_container, expect_host_veth=expect_host_veth
+                    )
+                    sampler.wait_for_func_status(result=True)
+
+
+@generate_logs()
+def get_host_veth_sampler(pod_name, pod_container, expect_host_veth):
+    """
+    Wait until host veth are equal to expected veth number
+
+    Args:
+        pod_name (str): Pod name.
+        pod_container (str): Pod container name.
+        expect_host_veth (int): Expected number of veth on the host.
+
+    Returns:
+        bool: True if current veth number == expected veth number, False otherwise.
+    """
+    out = utils.run_command_on_pod(
+        command=config.IP_LINK_SHOW_BETH_CMD, pod=pod_name, container=pod_container
+    )[1]
+    return int(out.strip()) == expect_host_veth
