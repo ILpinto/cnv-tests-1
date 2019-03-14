@@ -18,13 +18,8 @@ SLEEP = 1
 class OcpClient(object):
     def __init__(self):
         urllib3.disable_warnings()
-        kubeconfig = os.path.join(os.environ.get('WORKSPACE'), 'openshift-master.kubeconfig')
         try:
-            if os.path.isfile(kubeconfig):
-                client_config = kube_config.new_client_from_config(config_file=kubeconfig)
-                self.dyn_client = DynamicClient(client=client_config)
-            else:
-                self.dyn_client = DynamicClient(kube_config.new_client_from_config())
+            self.dyn_client = DynamicClient(kube_config.new_client_from_config())
         except (kube_config.ConfigException, urllib3.exceptions.MaxRetryError):
             LOGGER.error('You need to be login to cluster or have openshift-master.kubeconfig under $WORKSPACE')
             raise
