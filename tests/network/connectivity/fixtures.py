@@ -54,11 +54,11 @@ def prepare_env(request):
     compute_nodes = api.get_nodes(label_selector="node-role.kubernetes.io/compute=true")
     assert utils.run_command(command=config.SVC_CMD)[0]
     assert utils.run_command(command=config.ADM_CMD)[0]
-    api.create_resource(yaml_file=config.PRIVILEGED_POD_YAML)
+    assert api.create_resource(yaml_file=config.PRIVILEGED_POD_YAML, wait=True)
     config.PRIVILEGED_PODS = api.get_pods(label_selector="app=privileged-test-pod")
     assert len(compute_nodes) == len(config.PRIVILEGED_PODS)
-    api.create_resource(yaml_file=config.OVS_VLAN_YAML)
-    api.create_resource(yaml_file=config.OVS_BOND_YAML)
+    assert api.create_resource(yaml_file=config.OVS_VLAN_YAML, wait=True)
+    assert api.create_resource(yaml_file=config.OVS_BOND_YAML, wait=True)
     for node in compute_nodes:
         for addr in node.status.addresses:
             if addr.type == "InternalIP":
@@ -222,7 +222,7 @@ def prepare_env(request):
         volumes.append(cloud_init_data)
         spec['volumes'] = volumes
         json_out['spec']['template']['spec'] = spec
-        assert api.create_resource(resource_dict=json_out, namespace=config.NETWORK_NS)
+        assert api.create_resource(resource_dict=json_out, namespace=config.NETWORK_NS, wait=True)
 
     for vmi in vms:
         assert api.wait_for_vmi_status(vmi=vmi, status="Running")

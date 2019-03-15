@@ -203,7 +203,7 @@ class OcpClient(object):
 
         if not resource_dict:
             with open(yaml_file, 'r') as stream:
-                resource_dict = yaml.load(stream)
+                resource_dict = yaml.full_load(stream)
 
         namespace = resource_dict.get('metadata', {}).get('namespace', namespace)
         resource_name = resource_dict.get('metadata', {}).get('name')
