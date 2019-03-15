@@ -55,8 +55,8 @@ def prepare_env(request):
     assert utils.run_command(command=config.SVC_CMD)[0]
     assert utils.run_command(command=config.ADM_CMD)[0]
     assert api.create_resource(yaml_file=config.PRIVILEGED_POD_YAML)
+    wait_for_pods_to_match_compute_nodes_number(api=api, number_of_nodes=len(compute_nodes))
     config.PRIVILEGED_PODS = api.get_pods(label_selector="app=privileged-test-pod")
-    assert len(compute_nodes) == len(config.PRIVILEGED_PODS)
     assert api.create_resource(yaml_file=config.OVS_VLAN_YAML, wait=True)
     assert api.create_resource(yaml_file=config.OVS_BOND_YAML, wait=True)
     for node in compute_nodes:
@@ -257,12 +257,13 @@ def wait_for_vm_interfaces(api, vmi):
 
 
 @generate_logs()
-def wait_for_pods(api):
+def wait_for_pods_to_match_compute_nodes_number(api, number_of_nodes):
     """
     Wait for pods to be created from DaemonSet
 
     Args:
         api (DynamicClient): OCP utilities instance.
+        number_of_nodes (int): Number of nodes to match for.
 
     Returns:
         bool: True if Pods created.
@@ -275,5 +276,5 @@ def wait_for_pods(api):
         timeout=30, sleep=1, func=api.get_pods, label_selector="app=privileged-test-pod"
     )
     for sample in sampler:
-        if sample:
+        if len(sample) == number_of_nodes:
             return True
