@@ -61,7 +61,11 @@ class TimeoutSampler(object):
             self.start_time = time.time()
         while True:
             self.last_sample_time = time.time()
-            yield self.func(*self.func_args, **self.func_kwargs)
+            try:
+                yield self.func(*self.func_args, **self.func_kwargs)
+            except Exception:
+                pass
+
             if self.timeout < (time.time() - self.start_time):
                 raise self.timeout_exc_cls(*self.timeout_exc_args)
             time.sleep(self.sleep)

@@ -256,6 +256,7 @@ def wait_for_vm_interfaces(api, vmi):
             return True
 
 
+@generate_logs()
 def wait_for_pods(api):
     """
     Wait for pods to be created from DaemonSet
