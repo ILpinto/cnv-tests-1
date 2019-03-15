@@ -54,7 +54,7 @@ def prepare_env(request):
     compute_nodes = api.get_nodes(label_selector="node-role.kubernetes.io/compute=true")
     assert utils.run_command(command=config.SVC_CMD)[0]
     assert utils.run_command(command=config.ADM_CMD)[0]
-    assert api.create_resource(yaml_file=config.PRIVILEGED_POD_YAML, wait=True)
+    assert api.create_resource(yaml_file=config.PRIVILEGED_POD_YAML)
     config.PRIVILEGED_PODS = api.get_pods(label_selector="app=privileged-test-pod")
     assert len(compute_nodes) == len(config.PRIVILEGED_PODS)
     assert api.create_resource(yaml_file=config.OVS_VLAN_YAML, wait=True)
@@ -243,7 +243,7 @@ def wait_for_vm_interfaces(api, vmi):
         vmi (str): VMI name.
 
     Returns:
-        bool: If agent report VMI interfaces.
+        bool: True if agent report VMI interfaces.
 
     Raises:
         TimeoutExpiredError: After timeout reached.
@@ -253,4 +253,26 @@ def wait_for_vm_interfaces(api, vmi):
         ifcs = sample.get('status', {}).get('interfaces', [])
         active_ifcs = [i for i in ifcs if i.get('ipAddress') and i.get('interfaceName')]
         if len(active_ifcs) == len(ifcs):
+            return True
+
+
+def wait_for_pods(api):
+    """
+    Wait for pods to be created from DaemonSet
+
+    Args:
+        api (DynamicClient): OCP utilities instance.
+
+    Returns:
+        bool: True if Pods created.
+
+    Raises:
+        TimeoutExpiredError: After timeout reached.
+
+    """
+    sampler = utils.TimeoutSampler(
+        timeout=30, sleep=1, func=api.get_pods, label_selector="app=privileged-test-pod"
+    )
+    for sample in sampler:
+        if sample:
             return True

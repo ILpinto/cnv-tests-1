@@ -75,9 +75,7 @@ class OcpClient(object):
         Returns:
             list: Resources.
         """
-        return self.dyn_client.resources.get(
-            api_version=api_version, kind=kind
-        ).get(**kwargs).items
+        return self.dyn_client.resources.get(api_version=api_version, kind=kind).get(**kwargs).items
 
     @generate_logs()
     def wait_for_resource(self, name, api_version, kind, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
