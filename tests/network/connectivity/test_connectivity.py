@@ -33,7 +33,7 @@ class TestConnectivity(object):
         [
             pytest.param('pod_ip'),
             pytest.param('ovs_ip'),
-            pytest.param('bond_ip', marks=(pytest.mark.skipif(not config.BOND_SUPPORT_ENV, reason='No BOND support'))),
+            pytest.param('bond_ip'),
             pytest.param('non_vlan_ip')
         ],
         ids=[
@@ -47,6 +47,10 @@ class TestConnectivity(object):
         """
         Check connectivity
         """
+        if ip == 'bond_ip':
+            if not config.BOND_SUPPORT_ENV:
+                pytest.skip(msg='No BOND support')
+
         _id = utils.get_test_parametrize_ids(item=self.test_connectivity.pytestmark, params=ip)
         LOGGER.info(_id)
         positive = ip != 'non_vlan_ip'
