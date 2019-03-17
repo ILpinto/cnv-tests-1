@@ -128,7 +128,7 @@ def run_command_on_pod(command, pod, container=None):
         tuple: True, out if command succeeded, False, err otherwise.
     """
     container_name = "-c {container}".format(container=container or "") if container else ""
-    command = "oc exec -it {pod} {container_name} -- {command}".format(
+    command = "oc exec -i {pod} {container_name} -- {command}".format(
         pod=pod, container_name=container_name, command=command
     )
     return run_command(command=command)
