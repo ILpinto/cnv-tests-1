@@ -65,7 +65,6 @@ class TestGuestPerformance(object):
     """
     In-guest performance bandwidth passthrough
     """
-
     def test_guest_performance(self):
         """
         In-guest performance bandwidth passthrough

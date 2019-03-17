@@ -4,9 +4,62 @@
 Pytest conftest file for CNV tests
 """
 
+import os
 import pytest
 from utilities import client
 from . import config
+
+
+def pytest_collection_modifyitems(session, config, items):
+    """
+    Add polarion test case it from tests to junit xml
+    """
+    for item in items:
+        for marker in item.iter_markers(name='polarion'):
+            test_id = marker.args[0]
+            item.user_properties.append(('polarion-testcase-id', test_id))
+
+
+def pytest_runtest_makereport(item, call):
+    """
+    incremental tests implementation
+    """
+    if "incremental" in item.keywords:
+        if call.excinfo is not None:
+            parent = item.parent
+            parent._previousfailed = item
+
+
+def pytest_runtest_setup(item):
+    """
+    Use incremental
+    """
+    if "incremental" in item.keywords:
+        previousfailed = getattr(item.parent, "_previousfailed", None)
+        if previousfailed is not None:
+            pytest.xfail("previous test failed (%s)" % previousfailed.name)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def junitxml_polarion(request):
+    """
+    Add polarion needed attributes to junit xml
+
+    export as os environment:
+        POLARION_CUSTOM_PLANNEDIN
+        POLARION_TESTRUN_ID
+        POLARION_CUSTOM_ARCH
+    """
+    if request.config.pluginmanager.hasplugin('junitxml'):
+        my_junit = getattr(request.config, "_xml", None)
+        my_junit.add_global_property('polarion-custom-isautomated', 'True')
+        my_junit.add_global_property('olarion-testrun-status-id', 'inprogress')
+        my_junit.add_global_property('polarion-custom-plannedin', os.getenv('POLARION_CUSTOM_PLANNEDIN'))
+        my_junit.add_global_property('polarion-user-id', 'cnv-qe')
+        my_junit.add_global_property('polarion-project-id', 'CNV')
+        my_junit.add_global_property('polarion-response-myproduct', 'cnv')
+        my_junit.add_global_property('polarion-testrun-id', os.getenv('POLARION_TESTRUN_ID'))
+        my_junit.add_global_property('polarion-custom-arch', os.getenv('POLARION_CUSTOM_ARCH'))
 
 
 @pytest.fixture(scope="session", autouse=True)
