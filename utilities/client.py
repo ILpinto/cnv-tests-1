@@ -19,9 +19,10 @@ class OcpClient(object):
     def __init__(self):
         urllib3.disable_warnings()
         try:
-            self.dyn_client = DynamicClient(kube_config.new_client_from_config())
+            kubeconfig = os.getenv('KUBECONFIG')
+            self.dyn_client = DynamicClient(kube_config.new_client_from_config(config_file=kubeconfig))
         except (kube_config.ConfigException, urllib3.exceptions.MaxRetryError):
-            LOGGER.error('You need to be login to cluster')
+            LOGGER.error('You need to be login to cluster or have $KUBECONFIG env configured')
             raise
 
     def get_resource(self, name, api_version, kind, **kwargs):
@@ -254,7 +255,7 @@ class OcpClient(object):
             bool: True if delete succeeded, False otherwise.
         """
         with open(yaml_file, 'r') as stream:
-            resource_dict = yaml.load(stream)
+            resource_dict = yaml.full_load(stream)
 
         namespace = resource_dict.get('metadata').get('namespace')
         resource_name = resource_dict.get('metadata').get('name')

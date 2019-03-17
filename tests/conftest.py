@@ -26,4 +26,4 @@ def init(request):
     request.addfinalizer(fin)
 
     for namespace in namespaces:
-        api.create_namespace(namespace=namespace, wait=True)
+        assert api.create_namespace(namespace=namespace, wait=True)
