@@ -19,6 +19,14 @@ def pytest_collection_modifyitems(session, config, items):
             test_id = marker.args[0]
             item.user_properties.append(('polarion-testcase-id', test_id))
 
+        for marker in item.iter_markers(name='bugzilla'):
+            test_id = marker.args[0]
+            item.user_properties.append(('bugzilla', test_id))
+
+        for marker in item.iter_markers(name='jira'):
+            test_id = marker.args[0]
+            item.user_properties.append(('jira', test_id))
+
 
 def pytest_runtest_makereport(item, call):
     """
@@ -48,18 +56,16 @@ def junitxml_polarion(request):
     export as os environment:
         POLARION_CUSTOM_PLANNEDIN
         POLARION_TESTRUN_ID
-        POLARION_CUSTOM_ARCH
     """
     if request.config.pluginmanager.hasplugin('junitxml'):
         my_junit = getattr(request.config, "_xml", None)
         my_junit.add_global_property('polarion-custom-isautomated', 'True')
-        my_junit.add_global_property('olarion-testrun-status-id', 'inprogress')
+        my_junit.add_global_property('polarion-testrun-status-id', 'inprogress')
         my_junit.add_global_property('polarion-custom-plannedin', os.getenv('POLARION_CUSTOM_PLANNEDIN'))
-        my_junit.add_global_property('polarion-user-id', 'cnv-qe')
+        my_junit.add_global_property('polarion-user-id', 'cnvqe')
         my_junit.add_global_property('polarion-project-id', 'CNV')
-        my_junit.add_global_property('polarion-response-myproduct', 'cnv')
+        my_junit.add_global_property('polarion-response-myproduct', 'cnv-test-run')
         my_junit.add_global_property('polarion-testrun-id', os.getenv('POLARION_TESTRUN_ID'))
-        my_junit.add_global_property('polarion-custom-arch', os.getenv('POLARION_CUSTOM_ARCH'))
 
 
 @pytest.fixture(scope="session", autouse=True)

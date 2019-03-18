@@ -6,3 +6,8 @@ pytest
 python-autologs
 bitmath
 urllib3
+pytest-jira
+python-bugzilla
+
+# pytest-marker-bugzilla
+git+git://github.com/rhevm-qe-automation/pytest-marker-bugzilla.git
