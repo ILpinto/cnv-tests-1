@@ -1,8 +1,8 @@
-from tests.network.config import *
+from tests.network.config import *  # noqa: F403
 
 #  GENERAL
-SVC_CMD = "oc create serviceaccount privileged-test-user -n {ns}".format(ns=NETWORK_NS)
-SVC_DELETE_CMD = "oc delete serviceaccount privileged-test-user -n {ns}".format(ns=NETWORK_NS)
+SVC_CMD = "oc create serviceaccount privileged-test-user -n {ns}".format(ns=NETWORK_NS)  # noqa: F405
+SVC_DELETE_CMD = "oc delete serviceaccount privileged-test-user -n {ns}".format(ns=NETWORK_NS)  # noqa: F405
 ADM_CMD = "oc adm policy add-scc-to-user privileged -z privileged-test-user"
 IP_ADDR_ADD = "ip addr add {ip} dev {dev}"
 CREATED_BRIDGES = set()
