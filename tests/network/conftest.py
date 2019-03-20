@@ -5,8 +5,9 @@ Pytest conftest file for CNV network tests
 """
 
 import pytest
-from utilities import client
 from tests.network import config
+from utilities import types
+from resources.namespace import NameSpace
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -14,13 +15,15 @@ def init(request):
     """
     Create test namespaces
     """
-    api = client.OcpClient()
-
     def fin():
         """
         Remove test namespaces
         """
-        assert api.delete_namespace(namespace=config.NETWORK_NS, wait=True)
+        ns = NameSpace(name=config.NETWORK_NS)
+        ns.delete(wait=True)
     request.addfinalizer(fin)
 
-    assert api.create_namespace(namespace=config.NETWORK_NS, wait=True, switch=True)
+    ns = NameSpace(name=config.NETWORK_NS)
+    ns.create(wait=True)
+    ns.wait_for_status(status=types.ACTIVE)
+    ns.work_on()

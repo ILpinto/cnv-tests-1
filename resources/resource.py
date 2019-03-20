@@ -53,11 +53,13 @@ class Resource(object):
         res = [i for i in resources if i.get('metadata', {}).get('name') == self.name]
         return res[0] if res else {}
 
+    @generate_logs()
     def list(self, **kwargs):
         """
         Get resources list
 
         Keyword Args:
+            get_names (bool): Return objects names only
             pretty
             _continue
             include_uninitialized
@@ -73,7 +75,10 @@ class Resource(object):
         Returns:
             list: Resources.
         """
-        return self.client.resources.get(api_version=self.api_version, kind=self.kind).get(**kwargs).items
+        list_items = self.client.resources.get(api_version=self.api_version, kind=self.kind).get(**kwargs).items
+        if kwargs.pop('get_names', None):
+            return [i.get('metadata', {}).get('name') for i in list_items]
+        return list_items
 
     @generate_logs()
     def wait(self, timeout=TIMEOUT, sleep=SLEEP):
@@ -131,17 +136,19 @@ class Resource(object):
             resource_dict (dict): Dict to create resource from.
             wait (bool) : True to wait for resource status.
 
-        Raises:
-            AssertionError: If missing parameter.
-
         Returns:
             bool: True if create succeeded, False otherwise.
         """
-        # assert (yaml_file or resource_dict), "Yaml file or resource dict is needed"
-        
         if yaml_file:
             with open(yaml_file, 'r') as stream:
-                resource_dict = yaml.full_load(stream)
+                data = yaml.full_load(stream)
+
+            self._extract_data_from_yaml(yaml_data=data)
+            res = utils.run_command(command=f'oc create -f {yaml_file}')[0]
+            if wait and res:
+                return self.wait()
+            return res
+
         if not resource_dict:
             resource_dict = {
                 'apiVersion': self.api_version,
@@ -150,38 +157,62 @@ class Resource(object):
             }
 
         resource_list = self.client.resources.get(api_version=self.api_version, kind=self.kind)
-        resource_list.create(body=resource_dict, namespace=self.namespace)
-        if wait:
+        res = resource_list.create(body=resource_dict, namespace=self.namespace)
+        if wait and res:
             return self.wait()
-        return True
+        return res
 
-    def delete(self, wait=False):
+    @generate_logs()
+    def delete(self, yaml_file=None, wait=False):
         """
         Delete resource
 
         Args:
+            yaml_file (str): Path to yaml file to delete from yaml.
             wait (bool): True to wait for pod to be deleted.
 
         Returns:
             True if delete succeeded, False otherwise.
-
         """
+        if yaml_file:
+            with open(yaml_file, 'r') as stream:
+                data = yaml.full_load(stream)
+
+            self._extract_data_from_yaml(yaml_data=data)
+            res = utils.run_command(command=f'oc delete -f {yaml_file}')[0]
+            if wait and res:
+                return self.wait_until_gone()
+            return res
+
         resource_list = self.client.resources.get(api_version=self.api_version, kind=self.kind)
         try:
-            resource_list.delete(name=self.name, namespace=self.namespace)
+            res = resource_list.delete(name=self.name, namespace=self.namespace)
+            if wait and res:
+                return self.wait_until_gone()
+            return res
         except NotFoundError:
             return False
 
-        if wait:
-            return self.wait_until_gone()
-        return True
-
+    @generate_logs()
     def status(self):
         """
-        Return resource status
+        Get resource status
+
         Status: Running,Scheduling, Pending, Unknown, CrashLoopBackOff
 
         Returns:
-           list: List with vmi with the
+           str: Status
         """
         return self.get().status.phase
+
+    def _extract_data_from_yaml(self, yaml_data):
+        """
+        Extract data from yaml stream
+
+        Args:
+            yaml_data (dict): Dict from yaml file
+        """
+        self.namespace = yaml_data.get('metadata').get('namespace')
+        self.name = yaml_data.get('metadata').get('name')
+        self.api_version = yaml_data.get('apiVersion')
+        self.kind = yaml_data.get('kind')

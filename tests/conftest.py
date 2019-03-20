@@ -6,7 +6,8 @@ Pytest conftest file for CNV tests
 
 import os
 import pytest
-from utilities import client
+from utilities import types
+from resources.namespace import NameSpace
 from . import config
 
 
@@ -59,13 +60,14 @@ def junitxml_polarion(request):
     """
     if request.config.pluginmanager.hasplugin('junitxml'):
         my_junit = getattr(request.config, "_xml", None)
-        my_junit.add_global_property('polarion-custom-isautomated', 'True')
-        my_junit.add_global_property('polarion-testrun-status-id', 'inprogress')
-        my_junit.add_global_property('polarion-custom-plannedin', os.getenv('POLARION_CUSTOM_PLANNEDIN'))
-        my_junit.add_global_property('polarion-user-id', 'cnvqe')
-        my_junit.add_global_property('polarion-project-id', 'CNV')
-        my_junit.add_global_property('polarion-response-myproduct', 'cnv-test-run')
-        my_junit.add_global_property('polarion-testrun-id', os.getenv('POLARION_TESTRUN_ID'))
+        if my_junit:
+            my_junit.add_global_property('polarion-custom-isautomated', 'True')
+            my_junit.add_global_property('polarion-testrun-status-id', 'inprogress')
+            my_junit.add_global_property('polarion-custom-plannedin', os.getenv('POLARION_CUSTOM_PLANNEDIN'))
+            my_junit.add_global_property('polarion-user-id', 'cnvqe')
+            my_junit.add_global_property('polarion-project-id', 'CNV')
+            my_junit.add_global_property('polarion-response-myproduct', 'cnv-test-run')
+            my_junit.add_global_property('polarion-testrun-id', os.getenv('POLARION_TESTRUN_ID'))
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -74,15 +76,17 @@ def init(request):
     Create test namespaces
     """
     namespaces = (config.TEST_NS, config.TEST_NS_ALTERNATIVE)
-    api = client.OcpClient()
 
     def fin():
         """
         Remove test namespaces
         """
         for namespace in namespaces:
-            api.delete_namespace(namespace=namespace, wait=True)
+            ns = NameSpace(name=namespace)
+            ns.delete(wait=True)
     request.addfinalizer(fin)
 
     for namespace in namespaces:
-        assert api.create_namespace(namespace=namespace, wait=True)
+        ns = NameSpace(name=namespace)
+        ns.create(wait=True)
+        ns.wait_for_status(status=types.ACTIVE)

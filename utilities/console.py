@@ -39,7 +39,7 @@ class Console(object):
         self.err_msg = "Failed to get console to {vm}. error: {error}"
         cmd = "virtctl console {vm}".format(vm=self.vm)
         if namespace:
-            cmd += "-n {namespace}".format(namespace=self.namespace)
+            cmd += " -n {namespace}".format(namespace=self.namespace)
 
         self.child = pexpect.spawn(cmd, encoding='utf-8')
 

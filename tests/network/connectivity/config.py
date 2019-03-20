@@ -26,7 +26,7 @@ VM_YAML_TEMPLATE = "tests/manifests/network/vm-template-fedora-multus.yaml"
 
 #  PODS
 PRIVILEGED_PODS = []
-PRIVILEGED_POD_YAML = "tests/manifests/privileged-pod.yml"
+PRIVILEGED_DAEMONSET_YAML = "tests/manifests/privileged-pod.yml"
 
 #  NODES
 OVS_NODES_IPS = ["192.168.0.3", "192.168.0.4"]
@@ -64,3 +64,6 @@ IP_LINK_SHOW = "ip link show {interface}"
 REAL_NICS_ENV = None
 CHECK_NIC_DRIVER_CMD = "bash -c 'basename $(readlink -f /sys/class/net/{nic}/device/driver/module/)'"
 BRIDGE_NAME_REAL_NICS = "br1_real_nics"
+
+
+ALL_BRIDGES = [BRIDGE_NAME_REAL_NICS, BRIDGE_NAME_VXLAN, BOND_BRIDGE]

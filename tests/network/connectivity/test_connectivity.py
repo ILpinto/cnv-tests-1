@@ -10,7 +10,8 @@ import pytest
 
 from autologs.autologs import generate_logs
 
-from utilities import client
+from resources.pod import Pod
+from resources.virtual_machine import VirtualMachine
 from . import config
 from utilities import console
 from utilities import utils
@@ -24,7 +25,6 @@ class TestConnectivity(object):
     """
     Test VM to VM connectivity
     """
-    api = client.OcpClient()
     src_vm = config.VMS_LIST[0]
     dst_vm = config.VMS_LIST[1]
 
@@ -55,7 +55,7 @@ class TestConnectivity(object):
         LOGGER.info(_id)
         positive = ip != 'non_vlan_ip'
         dst_ip = config.VMS.get(self.dst_vm).get(ip) if positive else config.OVS_NODES_IPS[0]
-        with console.Console(vm=self.src_vm, distro='fedora') as src_vm_console:
+        with console.Console(vm=self.src_vm, distro='fedora', namespace=config.NETWORK_NS) as src_vm_console:
             src_vm_console.sendline('ping -w 3 {ip}'.format(ip=dst_ip))
             src_vm_console.sendline('echo $?')
             src_vm_console.expect('0' if positive else '1')
@@ -75,9 +75,9 @@ class TestGuestPerformance(object):
         server_vm = config.VMS_LIST[0]
         client_vm = config.VMS_LIST[1]
         server_ip = config.VMS.get(server_vm).get('ovs_ip')
-        with console.Console(vm=server_vm, distro='fedora') as server_vm_console:
+        with console.Console(vm=server_vm, distro='fedora', namespace=config.NETWORK_NS) as server_vm_console:
             server_vm_console.sendline('iperf3 -sB {server_ip}'.format(server_ip=server_ip))
-            with console.Console(vm=client_vm, distro='fedora') as client_vm_console:
+            with console.Console(vm=client_vm, distro='fedora', namespace=config.NETWORK_NS) as client_vm_console:
                 client_vm_console.sendline('iperf3 -c {server_ip} -t 5 -u -J'.format(server_ip=server_ip))
                 client_vm_console.expect('}\r\r\n}\r\r\n')
                 iperf_data = client_vm_console.before
@@ -94,49 +94,47 @@ class TestVethRemovedAfterVmsDeleted(object):
     """
     Check that veth interfaces are removed from host after VM deleted
     """
-    api = client.OcpClient()
-
     def test_veth_removed_from_host_after_vm_deleted(self):
         """
         Check that veth interfaces are removed from host after VM deleted
         """
         for vm in config.VMS_LIST:
-            vm_info = self.api.get_vmi(vmi=vm)
+            vm_object = VirtualMachine(name=vm, namespace=config.NETWORK_NS)
+            vm_info = vm_object.get()
             vm_interfaces = vm_info.get('status', {}).get('interfaces', [])
-            vm_node = vm_info.get('status', {}).get('nodeName')
+            vm_node = vm_object.node()
             for pod in config.PRIVILEGED_PODS:
-                if pod.get('spec').get('nodeName') == vm_node:
-                    pod_name = pod.metadata.name
-                    pod_container = pod.spec.containers[0].name
-                    err, out = utils.run_command_on_pod(
-                        command=config.IP_LINK_SHOW_BETH_CMD, pod=pod_name, container=pod_container
+                pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
+                pod_container = pod_object.containers()[0].name
+                pod_node = pod_object.node()
+                if pod_node == vm_node:
+                    err, out = pod_object.run_command(
+                        command=config.IP_LINK_SHOW_BETH_CMD, container=pod_container
                     )
                     assert err
                     host_vath_before_delete = int(out.strip())
-                    assert self.api.delete_vm(vm=vm, namespace=config.NETWORK_NS, wait=True)
+                    assert vm_object.delete(wait=True)
                     expect_host_veth = host_vath_before_delete - len(vm_interfaces)
 
                     sampler = utils.TimeoutSampler(
                         timeout=30, sleep=1, func=get_host_veth_sampler,
-                        pod_name=pod_name, pod_container=pod_container, expect_host_veth=expect_host_veth
+                        pod=pod_object, pod_container=pod_container, expect_host_veth=expect_host_veth
                     )
                     sampler.wait_for_func_status(result=True)
 
 
 @generate_logs()
-def get_host_veth_sampler(pod_name, pod_container, expect_host_veth):
+def get_host_veth_sampler(pod, pod_container, expect_host_veth):
     """
     Wait until host veth are equal to expected veth number
 
     Args:
-        pod_name (str): Pod name.
+        pod (Pod): Pod object.
         pod_container (str): Pod container name.
         expect_host_veth (int): Expected number of veth on the host.
 
     Returns:
         bool: True if current veth number == expected veth number, False otherwise.
     """
-    out = utils.run_command_on_pod(
-        command=config.IP_LINK_SHOW_BETH_CMD, pod=pod_name, container=pod_container
-    )[1]
+    out = pod.run_command(command=config.IP_LINK_SHOW_BETH_CMD, container=pod_container)[1]
     return int(out.strip()) == expect_host_veth
