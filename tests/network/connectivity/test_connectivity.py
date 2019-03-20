@@ -11,6 +11,7 @@ import pytest
 from autologs.autologs import generate_logs
 
 from utilities import client
+from resources.pod import Pod
 from . import config
 from utilities import console
 from utilities import utils
@@ -105,11 +106,12 @@ class TestVethRemovedAfterVmsDeleted(object):
             vm_interfaces = vm_info.get('status', {}).get('interfaces', [])
             vm_node = vm_info.get('status', {}).get('nodeName')
             for pod in config.PRIVILEGED_PODS:
-                if pod.get('spec').get('nodeName') == vm_node:
-                    pod_name = pod.metadata.name
-                    pod_container = pod.spec.containers[0].name
-                    err, out = utils.run_command_on_pod(
-                        command=config.IP_LINK_SHOW_BETH_CMD, pod=pod_name, container=pod_container
+                pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
+                pod_container = pod_object.containers()[0].name
+                pod_node = pod_object.node()
+                if pod_node == vm_node:
+                    err, out = pod_object.run_command(
+                        command=config.IP_LINK_SHOW_BETH_CMD, container=pod_container
                     )
                     assert err
                     host_vath_before_delete = int(out.strip())
@@ -118,25 +120,23 @@ class TestVethRemovedAfterVmsDeleted(object):
 
                     sampler = utils.TimeoutSampler(
                         timeout=30, sleep=1, func=get_host_veth_sampler,
-                        pod_name=pod_name, pod_container=pod_container, expect_host_veth=expect_host_veth
+                        pod=pod_object, pod_container=pod_container, expect_host_veth=expect_host_veth
                     )
                     sampler.wait_for_func_status(result=True)
 
 
 @generate_logs()
-def get_host_veth_sampler(pod_name, pod_container, expect_host_veth):
+def get_host_veth_sampler(pod, pod_container, expect_host_veth):
     """
     Wait until host veth are equal to expected veth number
 
     Args:
-        pod_name (str): Pod name.
+        pod (Pod): Pod object.
         pod_container (str): Pod container name.
         expect_host_veth (int): Expected number of veth on the host.
 
     Returns:
         bool: True if current veth number == expected veth number, False otherwise.
     """
-    out = utils.run_command_on_pod(
-        command=config.IP_LINK_SHOW_BETH_CMD, pod=pod_name, container=pod_container
-    )[1]
+    out = pod.run_command(command=config.IP_LINK_SHOW_BETH_CMD, container=pod_container)[1]
     return int(out.strip()) == expect_host_veth
