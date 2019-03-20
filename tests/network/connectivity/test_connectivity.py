@@ -10,8 +10,8 @@ import pytest
 
 from autologs.autologs import generate_logs
 
-from utilities import client
 from resources.pod import Pod
+from resources.virtual_machine import VirtualMachine
 from . import config
 from utilities import console
 from utilities import utils
@@ -25,7 +25,6 @@ class TestConnectivity(object):
     """
     Test VM to VM connectivity
     """
-    api = client.OcpClient()
     src_vm = config.VMS_LIST[0]
     dst_vm = config.VMS_LIST[1]
 
@@ -95,16 +94,15 @@ class TestVethRemovedAfterVmsDeleted(object):
     """
     Check that veth interfaces are removed from host after VM deleted
     """
-    api = client.OcpClient()
-
     def test_veth_removed_from_host_after_vm_deleted(self):
         """
         Check that veth interfaces are removed from host after VM deleted
         """
         for vm in config.VMS_LIST:
-            vm_info = self.api.get_vmi(vmi=vm)
+            vm_object = VirtualMachine(name=vm, namespace=config.NETWORK_NS)
+            vm_info = vm_object.get()
             vm_interfaces = vm_info.get('status', {}).get('interfaces', [])
-            vm_node = vm_info.get('status', {}).get('nodeName')
+            vm_node = vm_object.node()
             for pod in config.PRIVILEGED_PODS:
                 pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
                 pod_container = pod_object.containers()[0].name
@@ -115,7 +113,7 @@ class TestVethRemovedAfterVmsDeleted(object):
                     )
                     assert err
                     host_vath_before_delete = int(out.strip())
-                    assert self.api.delete_vm(vm=vm, namespace=config.NETWORK_NS, wait=True)
+                    assert vm_object.delete(wait=True)
                     expect_host_veth = host_vath_before_delete - len(vm_interfaces)
 
                     sampler = utils.TimeoutSampler(

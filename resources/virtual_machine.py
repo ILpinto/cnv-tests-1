@@ -90,3 +90,12 @@ class VirtualMachine(Resource):
         """
         sampler = utils.TimeoutSampler(timeout=timeout, sleep=sleep, func=lambda: self.get().spec.running == status)
         return sampler.wait_for_func_status(result=True)
+
+    def node(self):
+        """
+        Get the node name where the VM is running
+
+        Returns:
+            str: Node name
+        """
+        return self.get().status.nodeName

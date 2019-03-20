@@ -3,6 +3,8 @@ import logging
 import pytest
 from utilities import client, utils, types
 from resources.node import Node
+from resources.virtual_machine import VirtualMachine
+from resources.virtual_machine_instance import VirtualMachineInstance
 from resources.pod import Pod
 from resources.resource import Resource
 from autologs.autologs import generate_logs
@@ -13,7 +15,6 @@ LOGGER = logging.getLogger(__name__)
 
 @pytest.fixture(scope='module', autouse=True)
 def prepare_env(request):
-    api = client.OcpClient()
     nodes_network_info = {}
     bond_name = config.BOND_NAME
     bond_bridge = config.BOND_BRIDGE
@@ -37,8 +38,9 @@ def prepare_env(request):
                 pod_object.run_command(command=config.IP_LINK_DEL_BOND, container=pod_container)
 
         for vm in vms:
-            if api.get_vm(vm=vm):
-                api.delete_vm(vm=vm, namespace=config.NETWORK_NS, wait=True)
+            vm_object = VirtualMachine(name=vm, namespace=config.NETWORK_NS)
+            if vm_object.get():
+                vm_object.delete(wait=True)
 
         utils.run_command(command=config.SVC_DELETE_CMD)
         for yaml_ in (config.PRIVILEGED_DAEMONSET_YAML, config.OVS_VLAN_YAML, config.OVS_BOND_YAML):
@@ -50,7 +52,7 @@ def prepare_env(request):
     assert utils.run_command(command=config.SVC_CMD)[0]
     assert utils.run_command(command=config.ADM_CMD)[0]
     assert Resource().create(yaml_file=config.PRIVILEGED_DAEMONSET_YAML)
-    wait_for_pods_to_match_compute_nodes_number(api=api, number_of_nodes=len(compute_nodes))
+    wait_for_pods_to_match_compute_nodes_number(number_of_nodes=len(compute_nodes))
     config.PRIVILEGED_PODS = Pod().list(get_names=True, label_selector="app=privileged-test-pod")
     assert Resource().create(yaml_file=config.OVS_VLAN_YAML)
     assert Resource().create(yaml_file=config.OVS_BOND_YAML)
@@ -180,6 +182,7 @@ def prepare_env(request):
             )[0]
 
     for vm in vms:
+        vm_object = VirtualMachine(name=vm, namespace=config.NETWORK_NS)
         json_out = utils.get_json_from_template(
             file_=config.VM_YAML_TEMPLATE, NAME=vm, MULTUS_NETWORK="ovs-vlan-net"
         )
@@ -217,25 +220,25 @@ def prepare_env(request):
         volumes.append(cloud_init_data)
         spec['volumes'] = volumes
         json_out['spec']['template']['spec'] = spec
-        assert api.create_resource(resource_dict=json_out, namespace=config.NETWORK_NS, wait=True)
+        assert vm_object.create(resource_dict=json_out, wait=True)
 
     for vmi in vms:
-        assert api.wait_for_vmi_status(vmi=vmi, status="Running")
-        wait_for_vm_interfaces(api=api, vmi=vmi)
-        vmi_data = api.get_vmi(vmi=vmi)
+        vmi_object = VirtualMachineInstance(name=vmi, namespace=config.NETWORK_NS)
+        assert vmi_object.wait_for_status(status=types.RUNNING)
+        wait_for_vm_interfaces(vmi=vmi)
+        vmi_data = VirtualMachineInstance.get()
         ifcs = vmi_data.get('status', {}).get('interfaces', [])
         active_ifcs = [i.get('ipAddress') for i in ifcs if i.get('interfaceName') == "eth0"]
         config.VMS[vmi]["pod_ip"] = active_ifcs[0].split("/")[0]
 
 
 @generate_logs()
-def wait_for_vm_interfaces(api, vmi):
+def wait_for_vm_interfaces(vmi):
     """
     Wait until guest agent report VMI interfaces.
 
     Args:
-        api (DynamicClient): OCP utilities instance.
-        vmi (str): VMI name.
+        vmi (VirtualMachineInstance): VMI object.
 
     Returns:
         bool: True if agent report VMI interfaces.
@@ -243,7 +246,7 @@ def wait_for_vm_interfaces(api, vmi):
     Raises:
         TimeoutExpiredError: After timeout reached.
     """
-    sampler = utils.TimeoutSampler(timeout=500, sleep=1, func=api.get_vmi, vmi=vmi)
+    sampler = utils.TimeoutSampler(timeout=500, sleep=1, func=vmi.get(), vmi=vmi)
     for sample in sampler:
         ifcs = sample.get('status', {}).get('interfaces', [])
         active_ifcs = [i for i in ifcs if i.get('ipAddress') and i.get('interfaceName')]
@@ -252,12 +255,11 @@ def wait_for_vm_interfaces(api, vmi):
 
 
 @generate_logs()
-def wait_for_pods_to_match_compute_nodes_number(api, number_of_nodes):
+def wait_for_pods_to_match_compute_nodes_number(number_of_nodes):
     """
     Wait for pods to be created from DaemonSet
 
     Args:
-        api (DynamicClient): OCP utilities instance.
         number_of_nodes (int): Number of nodes to match for.
 
     Returns:
