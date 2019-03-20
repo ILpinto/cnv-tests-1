@@ -38,7 +38,7 @@ class VirtualMachine(Resource):
             True if VM started, else False
 
         """
-        cmd_start = f"{self.cmd} start"
+        cmd_start = f"{self.cmd} start {self.name}"
         res = utils.run_command(command=cmd_start)[0]
         if wait and res:
             return self.wait_for_status(sleep=sleep, timeout=timeout, status=True)
@@ -57,7 +57,7 @@ class VirtualMachine(Resource):
             bool: True if VM stopped, else False
 
         """
-        cmd_stop = f"{self.cmd} stop"
+        cmd_stop = f"{self.cmd} stop {self.name}"
         res = utils.run_command(command=cmd_stop)[0]
         if wait and res:
             return self.wait_for_status(sleep=sleep, timeout=timeout, status=False)
