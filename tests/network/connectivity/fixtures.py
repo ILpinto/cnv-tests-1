@@ -1,7 +1,7 @@
 import logging
 
 import pytest
-from utilities import client, utils, types
+from utilities import utils, types
 from resources.node import Node
 from resources.virtual_machine import VirtualMachine
 from resources.virtual_machine_instance import VirtualMachineInstance
@@ -225,8 +225,8 @@ def prepare_env(request):
     for vmi in vms:
         vmi_object = VirtualMachineInstance(name=vmi, namespace=config.NETWORK_NS)
         assert vmi_object.wait_for_status(status=types.RUNNING)
-        wait_for_vm_interfaces(vmi=vmi)
-        vmi_data = VirtualMachineInstance.get()
+        wait_for_vm_interfaces(vmi=vmi_object)
+        vmi_data = vmi_object.get()
         ifcs = vmi_data.get('status', {}).get('interfaces', [])
         active_ifcs = [i.get('ipAddress') for i in ifcs if i.get('interfaceName') == "eth0"]
         config.VMS[vmi]["pod_ip"] = active_ifcs[0].split("/")[0]
@@ -246,7 +246,7 @@ def wait_for_vm_interfaces(vmi):
     Raises:
         TimeoutExpiredError: After timeout reached.
     """
-    sampler = utils.TimeoutSampler(timeout=500, sleep=1, func=vmi.get(), vmi=vmi)
+    sampler = utils.TimeoutSampler(timeout=500, sleep=1, func=vmi.get)
     for sample in sampler:
         ifcs = sample.get('status', {}).get('interfaces', [])
         active_ifcs = [i for i in ifcs if i.get('ipAddress') and i.get('interfaceName')]

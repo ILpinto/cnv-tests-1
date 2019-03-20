@@ -26,3 +26,4 @@ def init(request):
     ns = NameSpace(name=config.NETWORK_NS)
     ns.create(wait=True)
     ns.wait_for_status(status=types.ACTIVE)
+    ns.work_on()

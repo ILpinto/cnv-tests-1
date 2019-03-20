@@ -55,7 +55,7 @@ class TestConnectivity(object):
         LOGGER.info(_id)
         positive = ip != 'non_vlan_ip'
         dst_ip = config.VMS.get(self.dst_vm).get(ip) if positive else config.OVS_NODES_IPS[0]
-        with console.Console(vm=self.src_vm, distro='fedora') as src_vm_console:
+        with console.Console(vm=self.src_vm, distro='fedora', namespace=config.NETWORK_NS) as src_vm_console:
             src_vm_console.sendline('ping -w 3 {ip}'.format(ip=dst_ip))
             src_vm_console.sendline('echo $?')
             src_vm_console.expect('0' if positive else '1')
@@ -75,9 +75,9 @@ class TestGuestPerformance(object):
         server_vm = config.VMS_LIST[0]
         client_vm = config.VMS_LIST[1]
         server_ip = config.VMS.get(server_vm).get('ovs_ip')
-        with console.Console(vm=server_vm, distro='fedora') as server_vm_console:
+        with console.Console(vm=server_vm, distro='fedora', namespace=config.NETWORK_NS) as server_vm_console:
             server_vm_console.sendline('iperf3 -sB {server_ip}'.format(server_ip=server_ip))
-            with console.Console(vm=client_vm, distro='fedora') as client_vm_console:
+            with console.Console(vm=client_vm, distro='fedora', namespace=config.NETWORK_NS) as client_vm_console:
                 client_vm_console.sendline('iperf3 -c {server_ip} -t 5 -u -J'.format(server_ip=server_ip))
                 client_vm_console.expect('}\r\r\n}\r\r\n')
                 iperf_data = client_vm_console.before

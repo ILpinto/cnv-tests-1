@@ -216,9 +216,3 @@ class Resource(object):
         self.name = yaml_data.get('metadata').get('name')
         self.api_version = yaml_data.get('apiVersion')
         self.kind = yaml_data.get('kind')
-
-    def node(self):
-        """
-        Get the node name where the Pod is running
-        """
-        raise NotImplementedError
