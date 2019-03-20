@@ -39,10 +39,10 @@ class VirtualMachine(Resource):
 
         """
         cmd_start = f"{self.cmd} start"
-        if wait:
+        res = utils.run_command(command=cmd_start)[0]
+        if wait and res:
             return self.wait_for_status(sleep=sleep, timeout=timeout, status=True)
-        else:
-            return utils.run_command(command=cmd_start)
+        return res
     
     @generate_logs()
     def stop(self, timeout=TIMEOUT, sleep=SLEEP, wait=False):
@@ -58,10 +58,10 @@ class VirtualMachine(Resource):
 
         """
         cmd_stop = f"{self.cmd} stop"
-        if wait:
+        res = utils.run_command(command=cmd_stop)[0]
+        if wait and res:
             return self.wait_for_status(sleep=sleep, timeout=timeout, status=False)
-        else:
-            return utils.run_command(command=cmd_stop)
+        return res
             
     @generate_logs()
     def wait_for_status(self, status, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
