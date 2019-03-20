@@ -152,7 +152,7 @@ class Resource(object):
         resource_list = self.client.resources.get(api_version=self.api_version, kind=self.kind)
         resource_list.create(body=resource_dict, namespace=self.namespace)
         if wait:
-            return self.wait(name=self.name, api_version=self.api_version, kind=self.kind)
+            return self.wait()
         return True
 
     def delete(self, wait=False):
@@ -173,7 +173,7 @@ class Resource(object):
             return False
 
         if wait:
-            return self.wait_until_gone(name=self.name, api_version=self.api_version, kind=self.kind)
+            return self.wait_until_gone()
         return True
 
     def status(self):
