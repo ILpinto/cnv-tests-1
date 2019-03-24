@@ -1,5 +1,7 @@
 
 import logging
+from autologs.autologs import generate_logs
+
 
 import pexpect
 
@@ -50,6 +52,7 @@ class Console(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._exit()
 
+    @generate_logs()
     def fedora(self):
         """
         Connect to Fedora
@@ -69,6 +72,7 @@ class Console(object):
 
         return self.child
 
+    @generate_logs()
     def cirros(self):
         """
         Connect to Cirros
@@ -90,6 +94,7 @@ class Console(object):
 
         return self.child
 
+    @generate_logs()
     def alpine(self):
         """
         Connect to Alpine

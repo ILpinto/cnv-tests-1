@@ -147,6 +147,7 @@ class Resource(object):
 
             self._extract_data_from_yaml(yaml_data=data)
             res = utils.run_oc_command(command=f'create -f {yaml_file}', namespace=self.namespace)[0]
+            
             if wait and res:
                 return self.wait()
             return res
@@ -214,7 +215,8 @@ class Resource(object):
         Args:
             yaml_data (dict): Dict from yaml file
         """
-        self.namespace = yaml_data.get('metadata').get('namespace')
+        namespace = yaml_data.get('metadata').get('namespace')
+        self.namespace = self.namespace if not namespace else namespace
         self.name = yaml_data.get('metadata').get('name')
         self.api_version = yaml_data.get('apiVersion')
         self.kind = yaml_data.get('kind')
