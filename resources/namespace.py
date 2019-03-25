@@ -21,4 +21,4 @@ class NameSpace(Resource):
         Returns:
             bool: True f switched , False otherwise
         """
-        return utils.run_command(command=f"oc project {self.name}")[0]
+        return utils.run_oc_command(command=f"project {self.name}")[0]

@@ -34,7 +34,7 @@ class Pod(Resource):
         Returns:
             tuple: True, out if command succeeded, False, err otherwise.
         """
-        cmd = f"oc exec -i {self.name}"
+        cmd = f"exec -i {self.name}"
         if self.namespace:
             cmd += f" -n {self.namespace}"
 
@@ -42,7 +42,7 @@ class Pod(Resource):
             cmd += f" -c {container}"
 
         cmd += f" -- {command}"
-        return utils.run_command(command=cmd)
+        return utils.run_oc_command(command=cmd, namespace=self.namespace)
 
     def node(self):
         """
