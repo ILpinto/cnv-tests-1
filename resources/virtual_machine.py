@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from tests import config
 from .resource import Resource, SLEEP, TIMEOUT
 from utilities import utils, types
 from autologs.autologs import generate_logs
@@ -14,17 +13,14 @@ class VirtualMachine(Resource):
     Virtual Machine object, inherited from Resource.
     Implements actions start / stop / status / wait for VM status / is running
     """
-    
+
     def __init__(self, name, namespace=None):
         super(VirtualMachine, self).__init__()
         self.name = name
         self.namespace = namespace
         self.api_version = types.CNV_API_VERSION
         self.kind = types.VM
-        self.cmd = f"{config.VIRTCTL_CMD}"
-        if self.namespace:
-            self.cmd += f" -n {self.namespace}"
-    
+
     @generate_logs()
     def start(self, timeout=TIMEOUT, sleep=SLEEP, wait=False):
         """
@@ -38,12 +34,11 @@ class VirtualMachine(Resource):
             True if VM started, else False
 
         """
-        cmd_start = f"{self.cmd} start {self.name}"
-        res = utils.run_command(command=cmd_start)[0]
+        res = utils.run_virtctl_command(command="start", namespace=self.namespace)[0]
         if wait and res:
             return self.wait_for_status(sleep=sleep, timeout=timeout, status=True)
         return res
-    
+
     @generate_logs()
     def stop(self, timeout=TIMEOUT, sleep=SLEEP, wait=False):
         """
@@ -57,12 +52,11 @@ class VirtualMachine(Resource):
             bool: True if VM stopped, else False
 
         """
-        cmd_stop = f"{self.cmd} stop {self.name}"
-        res = utils.run_command(command=cmd_stop)[0]
+        res = utils.run_virtctl_command(command="stop", namespace=self.namespace)[0]
         if wait and res:
             return self.wait_for_status(sleep=sleep, timeout=timeout, status=False)
         return res
-            
+
     @generate_logs()
     def wait_for_status(self, status, timeout=TIMEOUT, sleep=SLEEP, **kwargs):
         """

@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import shlex
 import subprocess
 import time
@@ -134,6 +135,61 @@ def run_command_on_pod(command, pod, container=None):
     return run_command(command=command)
 
 
+def run_virtctl_command(command, namespace=None):
+    """
+    Run virtctl command
+
+    Args:
+        command (str): Command to run
+        namespace (str): Namespace to send to virtctl command
+
+    Returns:
+        tuple: True, out if command succeeded, False, err otherwise.
+    """
+    kubeconfig = os.getenv('KUBECONFIG')
+    cmd = f"virtctl {command}"
+    if namespace:
+        cmd += f" -n {namespace}"
+
+    if kubeconfig:
+        cmd += f" --kubeconfig {kubeconfig}"
+
+    return run_command(command=cmd)
+
+
+def run_oc_command(command, namespace=None):
+    """
+    Run oc command
+
+    Args:
+        command (str): Command to run
+        namespace (str): Namespace to send to oc command
+
+    Returns:
+        tuple: True, out if command succeeded, False, err otherwise.
+    """
+    last_ = None
+    kubeconfig = os.getenv('KUBECONFIG')
+    if " -- " in command:
+        split_cmd = command.split(" -- ")
+        first_ = split_cmd[0]
+        last_ = split_cmd[-1]
+    else:
+        first_ = command
+
+    cmd = f"oc {first_}"
+    if namespace:
+        cmd += f" -n {namespace}"
+
+    if kubeconfig:
+        cmd += f" --kubeconfig {kubeconfig}"
+
+    if last_:
+        cmd += f" -- {last_}"
+
+    return run_command(command=cmd)
+
+
 @generate_logs()
 def get_json_from_template(file_, **kwargs):
     """
@@ -148,11 +204,11 @@ def get_json_from_template(file_, **kwargs):
     Examples:
         get_json_from_vm_template(file_='path/to/file/name', NAME='vm-name-1')
     """
-    command = "oc process -f {template}".format(template=file_)
+    command = f"process -f {file_}"
     for k, v in kwargs.items():
-        command += " -p {k}={v}".format(k=k, v=v)
+        command += f" -p {k}={v}"
 
-    res, out = run_command(command=command)
+    res, out = run_oc_command(command=command)
     return {} if not res else json.loads(out).get('items')[0]
 
 

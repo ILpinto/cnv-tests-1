@@ -14,7 +14,7 @@ SLEEP = 1
 
 
 class Resource(object):
-    def __init__(self):
+    def __init__(self, name=None, api_version=None, kind=None, namespace=None):
         urllib3.disable_warnings()
         try:
             kubeconfig = os.getenv('KUBECONFIG')
@@ -22,11 +22,11 @@ class Resource(object):
         except (kube_config.ConfigException, urllib3.exceptions.MaxRetryError):
             LOGGER.error('You need to be login to cluster or have $KUBECONFIG env configured')
             raise
-        
-        self.kind = None
-        self.namespace = None
-        self.api_version = None
-        self.name = None
+
+        self.kind = kind
+        self.namespace = namespace
+        self.api_version = api_version
+        self.name = name
 
     def get(self, **kwargs):
         """
@@ -144,7 +144,7 @@ class Resource(object):
                 data = yaml.full_load(stream)
 
             self._extract_data_from_yaml(yaml_data=data)
-            res = utils.run_command(command=f'oc create -f {yaml_file}')[0]
+            res = utils.run_oc_command(command=f'create -f {yaml_file}', namespace=self.namespace)[0]
             if wait and res:
                 return self.wait()
             return res
@@ -179,7 +179,7 @@ class Resource(object):
                 data = yaml.full_load(stream)
 
             self._extract_data_from_yaml(yaml_data=data)
-            res = utils.run_command(command=f'oc delete -f {yaml_file}')[0]
+            res = utils.run_oc_command(command=f'delete -f {yaml_file}', namespace=self.namespace)[0]
             if wait and res:
                 return self.wait_until_gone()
             return res
