@@ -15,7 +15,7 @@ from resources.virtual_machine import VirtualMachine
 from . import config
 from utilities import console
 from utilities import utils
-from .fixtures import prepare_env  # noqa: F401
+from .fixtures import prepare_env, get_ovs_cni_pods  # noqa: F401
 
 
 LOGGER = logging.getLogger(__name__)
@@ -103,9 +103,9 @@ class TestVethRemovedAfterVmsDeleted(object):
             vm_info = vm_object.get()
             vm_interfaces = vm_info.get('status', {}).get('interfaces', [])
             vm_node = vm_object.node()
-            for pod in config.PRIVILEGED_PODS:
-                pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
-                pod_container = pod_object.containers()[0].name
+            for pod in get_ovs_cni_pods():
+                pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
+                pod_container = config.OVS_CNI_CONTAINER
                 pod_node = pod_object.node()
                 if pod_node == vm_node:
                     err, out = pod_object.run_command(

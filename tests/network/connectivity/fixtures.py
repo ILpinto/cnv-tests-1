@@ -28,36 +28,31 @@ def prepare_env(request):
         """
         Remove test namespaces
         """
-        for pod in config.PRIVILEGED_PODS:
-            pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
-            pod_container = pod_object.containers()[0].name
+        for pod in get_ovs_cni_pods():
+            pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
+            pod_container = config.OVS_CNI_CONTAINER
             for bridge in config.ALL_BRIDGES:
-                pod_object.run_command(command=config.OVS_VSCTL_DEL_BR.format(bridge=bridge), container=pod_container)
+                pod_object.run_command(command=f"{config.OVS_VSCTL_DEL_BR} {bridge}", container=pod_container)
 
             if config.BOND_SUPPORT_ENV:
-                pod_object.run_command(command=config.IP_LINK_DEL_BOND, container=pod_container)
+                pod_object.run_command(command=f"ip link del {bond_name}", container=pod_container)
 
         for vm in vms:
             vm_object = VirtualMachine(name=vm, namespace=config.NETWORK_NS)
             if vm_object.get():
                 vm_object.delete(wait=True)
 
-        utils.run_command(command=config.SVC_DELETE_CMD)
-        for yaml_ in (config.PRIVILEGED_DAEMONSET_YAML, config.OVS_VLAN_YAML, config.OVS_BOND_YAML):
+        for yaml_ in (config.OVS_VLAN_YAML, config.OVS_BOND_YAML, config.OVS_VLAN_YAML_VXLAN):
             Resource().delete(yaml_file=yaml_, wait=True)
 
     request.addfinalizer(fin)
 
     compute_nodes = Node().list(get_names=True, label_selector="node-role.kubernetes.io/compute=true")
-    assert utils.run_command(command=config.SVC_CMD)[0]
-    assert utils.run_command(command=config.ADM_CMD)[0]
-    assert Resource().create(yaml_file=config.PRIVILEGED_DAEMONSET_YAML)
-    wait_for_pods_to_match_compute_nodes_number(number_of_nodes=len(compute_nodes))
-    config.PRIVILEGED_PODS = Pod().list(get_names=True, label_selector="app=privileged-test-pod")
     assert Resource().create(yaml_file=config.OVS_VLAN_YAML)
+    assert Resource().create(yaml_file=config.OVS_VLAN_YAML_VXLAN)
     assert Resource().create(yaml_file=config.OVS_BOND_YAML)
     for node in compute_nodes:
-        node_obj = Node(name=node, namespace=config.NETWORK_NS)
+        node_obj = Node(name=node)
         node_info = node_obj.get()
         for addr in node_info.status.addresses:
             if addr.type == "InternalIP":
@@ -66,19 +61,19 @@ def prepare_env(request):
 
     #  Check if we running with real NICs (not on VM)
     #  Check the number of the NICs on the node to ser BOND support
-    for idx, pod in enumerate(config.PRIVILEGED_PODS):
-        pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
-        pod_container = pod_object.containers()[0].name
+    for idx, pod in enumerate(get_ovs_cni_pods()):
+        pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
+        pod_container = config.OVS_CNI_CONTAINER
         active_node_nics[pod] = []
         assert pod_object.wait_for_status(status=types.RUNNING)
         err, nics = pod_object.run_command(command=config.GET_NICS_CMD, container=pod_container)
         assert err
         nics = nics.splitlines()
-        err, default_gw = pod_object.run_command(command=config.GET_DEFAULT_GW_CMD, container=pod_container)
+        err, default_gw = pod_object.run_command(command="ip route show default", container=pod_container)
         assert err
         for nic in nics:
             err, nic_state = pod_object.run_command(
-                command=config.GET_NIC_STATE_CMD.format(nic=nic), container=pod_container
+                command=f"cat /sys/class/net/{nic}/operstate", container=pod_container
             )
             assert err
             if nic_state.strip() == "up":
@@ -96,53 +91,54 @@ def prepare_env(request):
         config.BOND_SUPPORT_ENV = len(active_node_nics[pod]) > 3
 
     #  Configure bridges on the nodes
-    for idx, pod in enumerate(config.PRIVILEGED_PODS):
-        pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
+    for idx, pod in enumerate(get_ovs_cni_pods()):
+        pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
         pod_name = pod
         node_name = pod_object.node()
-        pod_container = pod_object.containers()[0].name
+        pod_container = config.OVS_CNI_CONTAINER
         if config.REAL_NICS_ENV:
             assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_BR.format(bridge=bridge_name_real_nics), container=pod_container
+                command=f"{config.OVS_VSCTL_ADD_BR} {bridge_name_real_nics}", container=pod_container
             )[0]
 
-            config.CREATED_BRIDGES.add(bridge_name_real_nics)
             assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_PORT.format(
-                    bridge=bridge_name_real_nics, interface=active_node_nics[pod_name][0]
-                ), container=pod_container
+                command=f"{config.OVS_VSCTL_ADD_PORT} {bridge_name_real_nics} {active_node_nics[pod_name][0]}",
+                container=pod_container
             )[0]
         else:
             assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_BR.format(bridge=bridge_name_vxlan), container=pod_container
+                command=f"{config.OVS_VSCTL_ADD_BR} {bridge_name_vxlan}", container=pod_container
             )[0]
-            config.CREATED_BRIDGES.add(bridge_name_vxlan)
             for name, ip in nodes_network_info.items():
                 if name != node_name:
                     assert pod_object.run_command(
-                        command=config.OVS_VSCTL_ADD_VXLAN.format(bridge=bridge_name_vxlan, ip=ip),
-                        container=pod_container
+                        command=(
+                            f"{config.OVS_CMD} add-port {bridge_name_vxlan} vxlan -- "
+                            f"set Interface vxlan type=vxlan options:remote_ip={ip}"
+                        ), container=pod_container
                     )[0]
                     break
 
             assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_PORT_VXLAN.format(
-                    bridge=config.BRIDGE_NAME_VXLAN, port_1=vxlan_port, port_2=vxlan_port
+                command=(
+                    f"{config.OVS_CMD} add-port {bridge_name_vxlan} {vxlan_port} -- "
+                    f"set Interface {vxlan_port} type=internal"
                 ), container=pod_container
             )[0]
 
             assert pod_object.run_command(
-                command=config.IP_ADDR_ADD.format(ip=config.OVS_NODES_IPS[idx], dev=vxlan_port),
-                container=pod_container
+                command=f"ip addr add {config.OVS_NODES_IPS[idx]} dev {vxlan_port}", container=pod_container
             )[0]
 
     #  Configure bridge on BOND if env support BOND
     if config.BOND_SUPPORT_ENV:
-        bond_commands = [config.IP_LINK_ADD_BOND, config.IP_LINK_SET_BOND_PARAMS]
-        for pod in config.PRIVILEGED_PODS:
-            pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
+        bond_commands = [
+            f"ip link add {bond_name} type bond", f"ip link set {bond_name} type bond miimon 100 mode active-backup"
+        ]
+        for pod in get_ovs_cni_pods():
+            pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
             pod_name = pod
-            pod_container = pod_object.containers()[0].name
+            pod_container = config.OVS_CNI_CONTAINER
             for cmd in bond_commands:
                 assert pod_object.run_command(command=cmd,container=pod_container)[0]
 
@@ -152,8 +148,7 @@ def prepare_env(request):
                 )[0]
 
                 assert pod_object.run_command(
-                    command=config.IP_LINK_SET_INTERFACE_MASTER.format(interface=nic, bond=bond_name),
-                    container=pod_container
+                    command=f"ip link set {nic} master {bond_name}", container=pod_container
                 )[0]
 
                 assert pod_object.run_command(
@@ -164,28 +159,23 @@ def prepare_env(request):
                 command=config.IP_LINK_INTERFACE_UP.format(interface=bond_name), container=pod_container
             )[0]
 
-            res, out = pod_object.run_command(
-                command=config.IP_LINK_SHOW.format(interface=bond_name), container=pod_container
-            )
+            res, out = pod_object.run_command(command=f"ip link show {bond_name}", container=pod_container)
 
             assert res
             assert "state UP" in out
 
             assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_BR.format(bridge=bond_bridge), container=pod_container
+                command=f"{config.OVS_VSCTL_ADD_BR} {bond_bridge}", container=pod_container
             )[0]
 
-            config.CREATED_BRIDGES.add(bond_bridge)
             assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_PORT.format(bridge=bond_bridge, interface=bond_name),
-                container=pod_container
+                command=f"{config.OVS_VSCTL_ADD_PORT} {bond_bridge} {bond_name}", container=pod_container
             )[0]
 
     for vm in vms:
         vm_object = VirtualMachine(name=vm, namespace=config.NETWORK_NS)
-        json_out = utils.get_json_from_template(
-            file_=config.VM_YAML_TEMPLATE, NAME=vm, MULTUS_NETWORK="ovs-vlan-net"
-        )
+        network = "ovs-vlan-net" if config.REAL_NICS_ENV else "ovs-vlan-net-vxlan"
+        json_out = utils.get_json_from_template(file_=config.VM_YAML_TEMPLATE, NAME=vm, MULTUS_NETWORK=network)
         spec = json_out.get('spec').get('template').get('spec')
         volumes = spec.get('volumes')
         cloud_init = [i for i in volumes if 'cloudInitNoCloud' in i][0]
@@ -275,3 +265,8 @@ def wait_for_pods_to_match_compute_nodes_number(number_of_nodes):
     for sample in sampler:
         if len(sample) == number_of_nodes:
             return True
+
+
+def get_ovs_cni_pods():
+    pods = Pod().list(get_names=True)
+    return [i for i in pods if "ovs-cni" in i]
