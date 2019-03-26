@@ -15,7 +15,11 @@ from resources.virtual_machine import VirtualMachine
 from . import config
 from utilities import console
 from utilities import utils
-from .fixtures import prepare_env, get_ovs_cni_pods  # noqa: F401
+from .fixtures import (
+    prepare_env, get_ovs_cni_pods, create_networks_from_yaml, get_node_internal_ip, is_bare_metal, is_bond_supported,
+    create_ovs_bridges_real_nics, create_ovs_bridge_on_vxlan, create_bond, create_vms, wait_for_vms_status
+)
+  # noqa: F401
 
 
 LOGGER = logging.getLogger(__name__)
@@ -48,7 +52,7 @@ class TestConnectivity(object):
         Check connectivity
         """
         if ip == 'bond_ip':
-            if not config.BOND_SUPPORT_ENV:
+            if not pytest.bond_support_env:
                 pytest.skip(msg='No BOND support')
 
         _id = utils.get_test_parametrize_ids(item=self.test_connectivity.pytestmark, params=ip)
@@ -69,7 +73,7 @@ class TestGuestPerformance(object):
         """
         In-guest performance bandwidth passthrough
         """
-        if not config.REAL_NICS_ENV:
+        if not pytest.real_nics_env:
             pytest.skip(msg='Only run on bare metal env')
 
         server_vm = config.VMS_LIST[0]
@@ -103,7 +107,9 @@ class TestVethRemovedAfterVmsDeleted(object):
             vm_info = vm_object.get()
             vm_interfaces = vm_info.get('status', {}).get('interfaces', [])
             vm_node = vm_object.node()
-            for pod in get_ovs_cni_pods():
+            pods = get_ovs_cni_pods()
+            assert pods
+            for pod in pods:
                 pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
                 pod_container = config.OVS_CNI_CONTAINER
                 pod_node = pod_object.node()

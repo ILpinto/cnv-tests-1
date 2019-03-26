@@ -37,7 +37,6 @@ OVS_VSCTL_DEL_BR = f"{OVS_CMD} del-br"
 BRIDGE_NAME_VXLAN = "br1_for_vxlan"
 
 # BOND
-BOND_SUPPORT_ENV = None
 OVS_BOND_YAML = "tests/manifests/network/ovs-net-bond.yml"
 BOND_NAME = "bond1"
 BOND_BRIDGE = "br1_for_bond"
@@ -45,7 +44,6 @@ IP_LINK_INTERFACE_DOWN = "ip link set {interface} down"
 IP_LINK_INTERFACE_UP = "ip link set {interface} up"
 
 # REAL NICS
-REAL_NICS_ENV = None
 CHECK_NIC_DRIVER_CMD = "bash -c 'basename $(readlink -f /sys/class/net/{nic}/device/driver/module/)'"
 BRIDGE_NAME_REAL_NICS = "br1_real_nics"
 
