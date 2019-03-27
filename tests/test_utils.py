@@ -22,7 +22,7 @@ def wait_for_vm_interfaces(vmi, timeout=600):
     Raises:
         TimeoutExpiredError: After timeout reached.
     """
-    sampler = utils.TimeoutSampler(timeout=600, sleep=1, func=vmi.get)
+    sampler = utils.TimeoutSampler(timeout=timeout, sleep=1, func=vmi.get)
     LOGGER.info('Wait until guest agent is active')
     try:
         for sample in sampler:
