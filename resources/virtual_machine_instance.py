@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from .resource import Resource
+
 from utilities import types
+
+from .resource import Resource
 
 LOGGER = logging.getLogger(__name__)
 

@@ -1,13 +1,15 @@
-import logging
 
 import pytest
-from utilities import utils, types
+from autologs.autologs import generate_logs
+from tests.test_utils import wait_for_vm_interfaces
+
 from resources.node import Node
-from resources.virtual_machine import VirtualMachine
-from resources.virtual_machine_instance import VirtualMachineInstance
 from resources.pod import Pod
 from resources.resource import Resource
-from autologs.autologs import generate_logs
+from resources.virtual_machine import VirtualMachine
+from resources.virtual_machine_instance import VirtualMachineInstance
+from utilities import types, utils
+
 from . import config
 
 
@@ -44,6 +46,7 @@ def get_node_internal_ip(request):
             if addr.type == "InternalIP":
                 pytest.nodes_network_info[node] = addr.address
                 break
+    assert len(pytest.nodes_network_info.keys()) == len(compute_nodes)
 
 
 @pytest.fixture(scope='module')
@@ -346,28 +349,6 @@ def prepare_env(
 
 
 @generate_logs()
-def wait_for_vm_interfaces(vmi):
-    """
-    Wait until guest agent report VMI interfaces.
-
-    Args:
-        vmi (VirtualMachineInstance): VMI object.
-
-    Returns:
-        bool: True if agent report VMI interfaces.
-
-    Raises:
-        TimeoutExpiredError: After timeout reached.
-    """
-    sampler = utils.TimeoutSampler(timeout=600, sleep=1, func=vmi.get)
-    for sample in sampler:
-        ifcs = sample.get('status', {}).get('interfaces', [])
-        active_ifcs = [i for i in ifcs if i.get('ipAddress') and i.get('interfaceName')]
-        if len(active_ifcs) == len(ifcs):
-            return True
-
-
-@generate_logs()
 def wait_for_pods_to_match_compute_nodes_number(number_of_nodes):
     """
     Wait for pods to be created from DaemonSet
@@ -394,4 +375,4 @@ def get_ovs_cni_pods():
     """
     Get ovs-cni pods names
     """
-    return [i for i in  Pod().list(get_names=True) if i.startswith("ovs-cni")]
+    return [i for i in Pod().list(get_names=True) if i.startswith("ovs-cni")]

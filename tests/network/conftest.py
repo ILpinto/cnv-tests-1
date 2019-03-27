@@ -6,8 +6,9 @@ Pytest conftest file for CNV network tests
 
 import pytest
 from tests.network import config
-from utilities import types
+
 from resources.namespace import NameSpace
+from utilities import types
 
 
 @pytest.fixture(scope="session", autouse=True)

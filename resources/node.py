@@ -1,5 +1,6 @@
-from .resource import Resource
 from utilities import types
+
+from .resource import Resource
 
 
 class Node(Resource):

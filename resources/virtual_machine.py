@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from .resource import Resource, SLEEP, TIMEOUT
-from utilities import utils, types
+
 from autologs.autologs import generate_logs
+
+from utilities import types, utils
+
+from .resource import SLEEP, TIMEOUT, Resource
 
 LOGGER = logging.getLogger(__name__)
 

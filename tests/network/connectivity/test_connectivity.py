@@ -5,21 +5,23 @@ VM to VM connectivity
 """
 import json
 import logging
+
 import bitmath
 import pytest
-
 from autologs.autologs import generate_logs
 
 from resources.pod import Pod
 from resources.virtual_machine import VirtualMachine
+from utilities import console, utils
+
 from . import config
-from utilities import console
-from utilities import utils
-from .fixtures import (
-    prepare_env, get_ovs_cni_pods, create_networks_from_yaml, get_node_internal_ip, is_bare_metal, is_bond_supported,
-    create_ovs_bridges_real_nics, create_ovs_bridge_on_vxlan, create_bond, create_vms, wait_for_vms_status
-)
-  # noqa: F401
+from .fixtures import (  # noqa: F401
+    create_bond, create_networks_from_yaml,
+    create_ovs_bridge_on_vxlan,
+    create_ovs_bridges_real_nics, create_vms,
+    get_node_internal_ip, get_ovs_cni_pods, is_bare_metal,
+    is_bond_supported, prepare_env, wait_for_vms_status
+    )
 
 
 LOGGER = logging.getLogger(__name__)

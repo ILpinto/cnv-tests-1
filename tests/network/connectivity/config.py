@@ -1,4 +1,4 @@
-from tests.network.config import *  # noqa: F403
+from tests.network.config import *  # noqa: F401, F403
 
 #  GENERAL
 IP_LINK_SHOW_BETH_CMD = 'bash -c "ip -o link show type veth | wc -l"'
