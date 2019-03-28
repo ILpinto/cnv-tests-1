@@ -1,11 +1,13 @@
-import os
-import yaml
 import logging
+import os
+
 import urllib3
+import yaml
+from autologs.autologs import generate_logs
 from kubernetes import config as kube_config
 from openshift.dynamic import DynamicClient
 from openshift.dynamic.exceptions import NotFoundError
-from autologs.autologs import generate_logs
+
 from utilities import utils
 
 LOGGER = logging.getLogger(__name__)

@@ -6,18 +6,19 @@ Pytest conftest file for CNV network tests
 
 import pytest
 from tests.network import config
-from utilities import types
+
 from resources.namespace import NameSpace
+from utilities import types
 
 
 @pytest.fixture(scope="session", autouse=True)
-def init(request):
+def network_init(request):
     """
-    Create test namespaces
+    Create network test namespaces
     """
     def fin():
         """
-        Remove test namespaces
+        Remove network test namespaces
         """
         ns = NameSpace(name=config.NETWORK_NS)
         ns.delete(wait=True)

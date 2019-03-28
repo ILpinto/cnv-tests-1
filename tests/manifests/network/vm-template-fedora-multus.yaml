@@ -67,12 +67,8 @@ objects:
               chpasswd: { expire: False }
               bootcmd:
                 - "dnf install -y iperf3 qemu-guest-agent"
-#              runcmd:
-#                - "sed -i s/'PasswordAuthentication no'/'PasswordAuthentication yes'/g /etc/ssh/sshd_config"
-#                - "systemctl restart sshd"
-#                - systemctl start qemu-guest-agent
-#                - "nmcli con add type ethernet con-name eth1 ifname eth1"
-#                - "nmcli con mod eth1 ipv4.addresses ${IP_OVS}/24 ipv4.method 'manual'"
+              runcmd:
+                - "systemctl start qemu-guest-agent"
           name: cloudinitdisk
   status: {}
 
@@ -87,5 +83,3 @@ parameters:
   value: "4"
 - description: Multus network name
   name: MULTUS_NETWORK
-#- description: Multus network IP
-#  name: IP_OVS

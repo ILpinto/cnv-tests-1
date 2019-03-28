@@ -1,6 +1,6 @@
+from utilities import types, utils
+
 from .resource import Resource
-from utilities import types
-from utilities import utils
 
 
 class Pod(Resource):

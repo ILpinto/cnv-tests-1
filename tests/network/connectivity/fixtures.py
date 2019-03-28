@@ -1,191 +1,282 @@
-import logging
 
 import pytest
-from utilities import utils, types
+from autologs.autologs import generate_logs
+from tests.test_utils import wait_for_vm_interfaces
+
 from resources.node import Node
-from resources.virtual_machine import VirtualMachine
-from resources.virtual_machine_instance import VirtualMachineInstance
 from resources.pod import Pod
 from resources.resource import Resource
-from autologs.autologs import generate_logs
+from resources.virtual_machine import VirtualMachine
+from resources.virtual_machine_instance import VirtualMachineInstance
+from utilities import types, utils
+
 from . import config
 
-LOGGER = logging.getLogger(__name__)
 
-
-@pytest.fixture(scope='module', autouse=True)
-def prepare_env(request):
-    nodes_network_info = {}
-    bond_name = config.BOND_NAME
-    bond_bridge = config.BOND_BRIDGE
-    bridge_name_vxlan = config.BRIDGE_NAME_VXLAN
-    bridge_name_real_nics = config.BRIDGE_NAME_REAL_NICS
-    vxlan_port = config.OVS_NO_VLAN_PORT
-    vms = config.VMS_LIST
-    active_node_nics = {}
+@pytest.fixture(scope='module')
+def create_networks_from_yaml(request):
+    """
+    Create network CRDs from yaml files
+    """
+    resource = Resource(namespace=config.NETWORK_NS)
+    yamls = (config.OVS_VLAN_YAML, config.OVS_BOND_YAML, config.OVS_VLAN_YAML_VXLAN)
 
     def fin():
         """
-        Remove test namespaces
+        Remove network CRDs
         """
-        for pod in config.PRIVILEGED_PODS:
-            pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
-            pod_container = pod_object.containers()[0].name
-            for bridge in config.ALL_BRIDGES:
-                pod_object.run_command(command=config.OVS_VSCTL_DEL_BR.format(bridge=bridge), container=pod_container)
-
-            if config.BOND_SUPPORT_ENV:
-                pod_object.run_command(command=config.IP_LINK_DEL_BOND, container=pod_container)
-
-        for vm in vms:
-            vm_object = VirtualMachine(name=vm, namespace=config.NETWORK_NS)
-            if vm_object.get():
-                vm_object.delete(wait=True)
-
-        utils.run_command(command=config.SVC_DELETE_CMD)
-        for yaml_ in (config.PRIVILEGED_DAEMONSET_YAML, config.OVS_VLAN_YAML, config.OVS_BOND_YAML):
+        for yaml_ in yamls:
             Resource().delete(yaml_file=yaml_, wait=True)
-
     request.addfinalizer(fin)
 
+    for yaml_ in yamls:
+        resource.create(yaml_file=yaml_, wait=True)
+
+
+@pytest.fixture(scope='module')
+def get_node_internal_ip(request):
+    """
+    Get nodes internal IPs
+    """
     compute_nodes = Node().list(get_names=True, label_selector="node-role.kubernetes.io/compute=true")
-    assert utils.run_command(command=config.SVC_CMD)[0]
-    assert utils.run_command(command=config.ADM_CMD)[0]
-    assert Resource().create(yaml_file=config.PRIVILEGED_DAEMONSET_YAML)
-    wait_for_pods_to_match_compute_nodes_number(number_of_nodes=len(compute_nodes))
-    config.PRIVILEGED_PODS = Pod().list(get_names=True, label_selector="app=privileged-test-pod")
-    assert Resource().create(yaml_file=config.OVS_VLAN_YAML)
-    assert Resource().create(yaml_file=config.OVS_BOND_YAML)
     for node in compute_nodes:
-        node_obj = Node(name=node, namespace=config.NETWORK_NS)
+        node_obj = Node(name=node)
         node_info = node_obj.get()
         for addr in node_info.status.addresses:
             if addr.type == "InternalIP":
-                nodes_network_info[node] = addr.address
+                pytest.nodes_network_info[node] = addr.address
                 break
+    assert len(pytest.nodes_network_info.keys()) == len(compute_nodes)
 
-    #  Check if we running with real NICs (not on VM)
-    #  Check the number of the NICs on the node to ser BOND support
-    for idx, pod in enumerate(config.PRIVILEGED_PODS):
-        pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
-        pod_container = pod_object.containers()[0].name
-        active_node_nics[pod] = []
+
+@pytest.fixture(scope='module')
+def is_bare_metal():
+    """
+    Check if setup is on bare-metal
+    """
+    pods = get_ovs_cni_pods()
+    assert pods
+    for idx, pod in enumerate(pods):
+        pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
+        pod_container = config.OVS_CNI_CONTAINER
+        pytest.active_node_nics[pod] = []
         assert pod_object.wait_for_status(status=types.RUNNING)
         err, nics = pod_object.run_command(command=config.GET_NICS_CMD, container=pod_container)
         assert err
         nics = nics.splitlines()
-        err, default_gw = pod_object.run_command(command=config.GET_DEFAULT_GW_CMD, container=pod_container)
+        err, default_gw = pod_object.run_command(command="ip route show default", container=pod_container)
         assert err
         for nic in nics:
             err, nic_state = pod_object.run_command(
-                command=config.GET_NIC_STATE_CMD.format(nic=nic), container=pod_container
+                command=f"cat /sys/class/net/{nic}/operstate", container=pod_container
             )
             assert err
             if nic_state.strip() == "up":
                 if nic in [i for i in default_gw.splitlines() if 'default' in i][0]:
                     continue
 
-                active_node_nics[pod].append(nic)
+                pytest.active_node_nics[pod].append(nic)
 
                 err, driver = pod_object.run_command(
                     command=config.CHECK_NIC_DRIVER_CMD.format(nic=nic), container=pod_container
                 )
                 assert err
-                config.REAL_NICS_ENV = driver.strip() != "virtio_net"
+                pytest.real_nics_env = driver.strip() != "virtio_net"
 
-        config.BOND_SUPPORT_ENV = len(active_node_nics[pod]) > 3
 
-    #  Configure bridges on the nodes
-    for idx, pod in enumerate(config.PRIVILEGED_PODS):
-        pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
+@pytest.fixture(scope='module')
+def is_bond_supported():
+    """
+    Check if setup support BOND (have more then 2 NICs up)
+    """
+    pods = get_ovs_cni_pods()
+    assert pods
+    pytest.bond_support_env = max([len(pytest.active_node_nics[i]) for i in pods]) > 2
+
+
+@pytest.fixture(scope='module')
+def create_ovs_bridges_real_nics(request):
+    """
+    Create needed OVS bridges when setup is bare-metal
+    """
+    if not pytest.real_nics_env:
+        return
+
+    real_nics_bridge = config.BRIDGE_NAME_REAL_NICS
+
+    def fin():
+        """
+        Remove created OVS bridges
+        """
+        pods = get_ovs_cni_pods()
+        assert pods
+        for pod in pods:
+            pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
+            pod_container = config.OVS_CNI_CONTAINER
+            pod_object.run_command(command=f"{config.OVS_VSCTL_DEL_BR} {real_nics_bridge}", container=pod_container)
+    request.addfinalizer(fin)
+
+    pods = get_ovs_cni_pods()
+    assert pods
+    for idx, pod in enumerate(pods):
+        pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
         pod_name = pod
+        pod_container = config.OVS_CNI_CONTAINER
+        if pytest.real_nics_env:
+            assert pod_object.run_command(
+                command=f"{config.OVS_VSCTL_ADD_BR} {real_nics_bridge}", container=pod_container
+            )[0]
+
+            assert pod_object.run_command(
+                command=(
+                    f"{config.OVS_VSCTL_ADD_PORT} "
+                    f"{real_nics_bridge} "
+                    f"{pytest.active_node_nics[pod_name][0]}"
+                ), container=pod_container
+            )[0]
+
+
+@pytest.fixture(scope='module')
+def create_ovs_bridge_on_vxlan(request):
+    """
+    Create needed OVS bridges when setup is not bare-metal
+    """
+    if pytest.real_nics_env:
+        return
+
+    bridge_name_vxlan = config.BRIDGE_NAME_VXLAN
+    vxlan_port = config.OVS_NO_VLAN_PORT
+
+    def fin():
+        """
+        Remove created OVS bridges
+        """
+        pods = get_ovs_cni_pods()
+        assert pods
+        for pod in pods:
+            pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
+            pod_container = config.OVS_CNI_CONTAINER
+            pod_object.run_command(command=f"{config.OVS_VSCTL_DEL_BR} {bridge_name_vxlan}", container=pod_container)
+    request.addfinalizer(fin)
+
+    pods = get_ovs_cni_pods()
+    assert pods
+    for idx, pod in enumerate(pods):
+        pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
+        pod_container = config.OVS_CNI_CONTAINER
         node_name = pod_object.node()
-        pod_container = pod_object.containers()[0].name
-        if config.REAL_NICS_ENV:
-            assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_BR.format(bridge=bridge_name_real_nics), container=pod_container
-            )[0]
-
-            config.CREATED_BRIDGES.add(bridge_name_real_nics)
-            assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_PORT.format(
-                    bridge=bridge_name_real_nics, interface=active_node_nics[pod_name][0]
-                ), container=pod_container
-            )[0]
-        else:
-            assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_BR.format(bridge=bridge_name_vxlan), container=pod_container
-            )[0]
-            config.CREATED_BRIDGES.add(bridge_name_vxlan)
-            for name, ip in nodes_network_info.items():
-                if name != node_name:
-                    assert pod_object.run_command(
-                        command=config.OVS_VSCTL_ADD_VXLAN.format(bridge=bridge_name_vxlan, ip=ip),
-                        container=pod_container
-                    )[0]
-                    break
-
-            assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_PORT_VXLAN.format(
-                    bridge=config.BRIDGE_NAME_VXLAN, port_1=vxlan_port, port_2=vxlan_port
-                ), container=pod_container
-            )[0]
-
-            assert pod_object.run_command(
-                command=config.IP_ADDR_ADD.format(ip=config.OVS_NODES_IPS[idx], dev=vxlan_port),
-                container=pod_container
-            )[0]
-
-    #  Configure bridge on BOND if env support BOND
-    if config.BOND_SUPPORT_ENV:
-        bond_commands = [config.IP_LINK_ADD_BOND, config.IP_LINK_SET_BOND_PARAMS]
-        for pod in config.PRIVILEGED_PODS:
-            pod_object = Pod(name=pod, namespace=config.NETWORK_NS)
-            pod_name = pod
-            pod_container = pod_object.containers()[0].name
-            for cmd in bond_commands:
-                assert pod_object.run_command(command=cmd,container=pod_container)[0]
-
-            for nic in active_node_nics[pod_name][1:3]:
+        assert pod_object.run_command(
+            command=f"{config.OVS_VSCTL_ADD_BR} {bridge_name_vxlan}", container=pod_container
+        )[0]
+        for name, ip in pytest.nodes_network_info.items():
+            if name != node_name:
                 assert pod_object.run_command(
-                    command=config.IP_LINK_INTERFACE_DOWN.format(interface=nic), container=pod_container
+                    command=(
+                        f"{config.OVS_CMD} add-port {bridge_name_vxlan} vxlan -- "
+                        f"set Interface vxlan type=vxlan options:remote_ip={ip}"
+                    ), container=pod_container
                 )[0]
+                break
 
-                assert pod_object.run_command(
-                    command=config.IP_LINK_SET_INTERFACE_MASTER.format(interface=nic, bond=bond_name),
-                    container=pod_container
-                )[0]
+        assert pod_object.run_command(
+            command=(
+                f"{config.OVS_CMD} add-port {bridge_name_vxlan} {vxlan_port} -- "
+                f"set Interface {vxlan_port} type=internal"
+            ), container=pod_container
+        )[0]
 
-                assert pod_object.run_command(
-                    command=config.IP_LINK_INTERFACE_UP.format(interface=nic), container=pod_container
-                )[0]
+        assert pod_object.run_command(
+            command=f"ip addr add {config.OVS_NODES_IPS[idx]} dev {vxlan_port}", container=pod_container
+        )[0]
 
+
+@pytest.fixture(scope='module')
+def create_bond(request):
+    """
+    Create BOND if setup support BOND
+    """
+    bond_name = config.BOND_NAME
+    bond_bridge = config.BOND_BRIDGE
+
+    if not pytest.bond_support_env:
+        return
+
+    def fin():
+        """
+        Remove created BOND
+        """
+        pods = get_ovs_cni_pods()
+        assert pods
+        for pod in pods:
+            pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
+            pod_container = config.OVS_CNI_CONTAINER
+            pod_object.run_command(command=f"ip link del {bond_name}", container=pod_container)
+    request.addfinalizer(fin)
+
+    bond_commands = [
+        f"ip link add {bond_name} type bond", f"ip link set {bond_name} type bond miimon 100 mode active-backup"
+    ]
+    pods = get_ovs_cni_pods()
+    assert pods
+    for pod in pods:
+        pod_object = Pod(name=pod, namespace=config.KUBE_SYSTEM_NS)
+        pod_name = pod
+        pod_container = config.OVS_CNI_CONTAINER
+        for cmd in bond_commands:
+            assert pod_object.run_command(command=cmd, container=pod_container)[0]
+
+        for nic in pytest.active_node_nics[pod_name][1:3]:
             assert pod_object.run_command(
-                command=config.IP_LINK_INTERFACE_UP.format(interface=bond_name), container=pod_container
+                command=config.IP_LINK_INTERFACE_DOWN.format(interface=nic), container=pod_container
             )[0]
 
-            res, out = pod_object.run_command(
-                command=config.IP_LINK_SHOW.format(interface=bond_name), container=pod_container
-            )
-
-            assert res
-            assert "state UP" in out
-
             assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_BR.format(bridge=bond_bridge), container=pod_container
+                command=f"ip link set {nic} master {bond_name}", container=pod_container
             )[0]
 
-            config.CREATED_BRIDGES.add(bond_bridge)
             assert pod_object.run_command(
-                command=config.OVS_VSCTL_ADD_PORT.format(bridge=bond_bridge, interface=bond_name),
-                container=pod_container
+                command=config.IP_LINK_INTERFACE_UP.format(interface=nic), container=pod_container
             )[0]
+
+        assert pod_object.run_command(
+            command=config.IP_LINK_INTERFACE_UP.format(interface=bond_name), container=pod_container
+        )[0]
+
+        res, out = pod_object.run_command(command=f"ip link show {bond_name}", container=pod_container)
+
+        assert res
+        assert "state UP" in out
+
+        assert pod_object.run_command(
+            command=f"{config.OVS_VSCTL_ADD_BR} {bond_bridge}", container=pod_container
+        )[0]
+
+        assert pod_object.run_command(
+            command=f"{config.OVS_VSCTL_ADD_PORT} {bond_bridge} {bond_name}", container=pod_container
+        )[0]
+
+
+@pytest.fixture(scope='module')
+def create_vms(request):
+    """
+    Create VMs
+    """
+    vms = config.VMS_LIST
+
+    def fin():
+        """
+        Remove created VMs if exists (TestVethRemovedAfterVmsDeleted should remove them)
+        """
+        for vm in vms:
+            vm_object = VirtualMachine(name=vm, namespace=config.NETWORK_NS)
+            if vm_object.get():
+                vm_object.delete(wait=True)
+    request.addfinalizer(fin)
 
     for vm in vms:
         vm_object = VirtualMachine(name=vm, namespace=config.NETWORK_NS)
-        json_out = utils.get_json_from_template(
-            file_=config.VM_YAML_TEMPLATE, NAME=vm, MULTUS_NETWORK="ovs-vlan-net"
-        )
+        network = "ovs-vlan-net" if pytest.real_nics_env else "ovs-vlan-net-vxlan"
+        json_out = utils.get_json_from_template(file_=config.VM_YAML_TEMPLATE, NAME=vm, MULTUS_NETWORK=network)
         spec = json_out.get('spec').get('template').get('spec')
         volumes = spec.get('volumes')
         cloud_init = [i for i in volumes if 'cloudInitNoCloud' in i][0]
@@ -197,10 +288,10 @@ def prepare_env(request):
             "  - nmcli con mod eth1 ipv4.addresses {ip}/24 ipv4.method manual\n"
             "  - systemctl start qemu-guest-agent\n".format(ip=config.VMS.get(vm).get("ovs_ip"))
         )
-        if not config.REAL_NICS_ENV:
+        if not pytest.real_nics_env:
             cloud_init_user_data += "  - ip link set mtu 1450 eth1\n"
 
-        if config.BOND_SUPPORT_ENV:
+        if pytest.bond_support_env:
             interfaces = spec.get('domain').get('devices').get('interfaces')
             networks = spec.get('networks')
             bond_bridge_interface = {'bridge': {}, 'name': 'ovs-net-bond'}
@@ -222,7 +313,13 @@ def prepare_env(request):
         json_out['spec']['template']['spec'] = spec
         assert vm_object.create(resource_dict=json_out, wait=True)
 
-    for vmi in vms:
+
+@pytest.fixture(scope='module')
+def wait_for_vms_status(request):
+    """
+    Wait until VMs report guest agant data
+    """
+    for vmi in config.VMS_LIST:
         vmi_object = VirtualMachineInstance(name=vmi, namespace=config.NETWORK_NS)
         assert vmi_object.wait_for_status(status=types.RUNNING)
         wait_for_vm_interfaces(vmi=vmi_object)
@@ -232,26 +329,23 @@ def prepare_env(request):
         config.VMS[vmi]["pod_ip"] = active_ifcs[0].split("/")[0]
 
 
-@generate_logs()
-def wait_for_vm_interfaces(vmi):
+@pytest.fixture(scope='module', autouse=True)
+def prepare_env(
+    request,
+    create_networks_from_yaml,
+    get_node_internal_ip,
+    is_bare_metal,
+    is_bond_supported,
+    create_ovs_bridges_real_nics,
+    create_ovs_bridge_on_vxlan,
+    create_bond,
+    create_vms,
+    wait_for_vms_status
+):
     """
-    Wait until guest agent report VMI interfaces.
-
-    Args:
-        vmi (VirtualMachineInstance): VMI object.
-
-    Returns:
-        bool: True if agent report VMI interfaces.
-
-    Raises:
-        TimeoutExpiredError: After timeout reached.
+    Prepare env for tests
     """
-    sampler = utils.TimeoutSampler(timeout=500, sleep=1, func=vmi.get)
-    for sample in sampler:
-        ifcs = sample.get('status', {}).get('interfaces', [])
-        active_ifcs = [i for i in ifcs if i.get('ipAddress') and i.get('interfaceName')]
-        if len(active_ifcs) == len(ifcs):
-            return True
+    pass
 
 
 @generate_logs()
@@ -275,3 +369,10 @@ def wait_for_pods_to_match_compute_nodes_number(number_of_nodes):
     for sample in sampler:
         if len(sample) == number_of_nodes:
             return True
+
+
+def get_ovs_cni_pods():
+    """
+    Get ovs-cni pods names
+    """
+    return [i for i in Pod().list(get_names=True) if i.startswith("ovs-cni")]

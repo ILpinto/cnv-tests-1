@@ -5,9 +5,12 @@ Pytest conftest file for CNV tests
 """
 
 import os
+
 import pytest
-from utilities import types
+
 from resources.namespace import NameSpace
+from utilities import types
+
 from . import config
 
 
