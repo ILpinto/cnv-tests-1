@@ -10,4 +10,4 @@ pytest-jira
 python-bugzilla
 
 # pytest-marker-bugzilla
-git+git://github.com/rhevm-qe-automation/pytest-marker-bugzilla.git
+git+git://github.com/rhevm-qe-automation/pytest-marker-bugzilla.git#egg=pytest-marker-bugzilla

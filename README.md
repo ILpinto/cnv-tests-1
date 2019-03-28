@@ -9,6 +9,6 @@ oc login -u user -p password
 ## Running the tests
 ```
     sudo dnf install pipenv
-    pipenv install -rrequirements.txt
+    pipenv --three install -rrequirements.txt
     pipenv run pytest tests
 ```

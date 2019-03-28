@@ -67,6 +67,8 @@ objects:
               chpasswd: { expire: False }
               bootcmd:
                 - "dnf install -y iperf3 qemu-guest-agent"
+              runcmd:
+                - "systemctl start qemu-guest-agent"
           name: cloudinitdisk
   status: {}
 
