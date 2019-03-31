@@ -3,15 +3,13 @@
 """
 VM with sidecar
 """
-import logging
 import pytest
 
 from utilities import console
 from tests.virt import config
-from tests.virt.fixtures import create_vmi_with_yaml  # noqa: F401
+from tests.virt.fixtures import create_vmi_with_yaml
 
-
-LOGGER = logging.getLogger(__name__)
+CHECK_DMIDECODE_PACKAGE = "sudo dmidecode -s baseboard-manufacturer | grep 'Radical Edward' | wc -l\n"
 
 
 class TestVMWithSidecar(object):
@@ -31,5 +29,5 @@ class TestVMWithSidecar(object):
         with console.Console(
             vm=self.vm_name, distro=config.FEDORA_VM,  namespace=config.VIRT_NS
         ) as vm_console:
-            vm_console.sendline(config.CHECK_DMIDECODE_PACKAGE)
+            vm_console.sendline(CHECK_DMIDECODE_PACKAGE)
             vm_console.expect("1", timeout=20)

@@ -216,7 +216,7 @@ class Resource(object):
             yaml_data (dict): Dict from yaml file
         """
         namespace = yaml_data.get('metadata').get('namespace')
-        self.namespace = self.namespace if not namespace else namespace
+        self.namespace = self.namespace or namespace
         self.name = yaml_data.get('metadata').get('name')
         self.api_version = yaml_data.get('apiVersion')
         self.kind = yaml_data.get('kind')
