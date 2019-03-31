@@ -12,6 +12,7 @@ VM = 'VirtualMachine'
 POD = "Pod"
 NODE = 'Node'
 NAMESPACE = 'Namespace'
+CONFIG_MAP = "ConfigMap"
 
 # VMI / Pod status
 RUNNING = 'Running'
