@@ -219,10 +219,13 @@ class Resource(object):
         self.api_version = yaml_data.get('apiVersion')
         self.kind = yaml_data.get('kind')
 
+    @generate_logs()
     def update(self, resource_dict):
         """
         Update resource with resource dict
-        :param resource_dict: Resource dict
+        
+        Args:
+            resource_dict: Resource dictionary
         """
         resource_list = self.client.resources.get(api_version=self.api_version, kind=self.kind)
         resource_list.replace(body=resource_dict, namespace=self.namespace)
